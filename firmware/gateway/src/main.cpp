@@ -57,7 +57,7 @@ static void json_out(JsonDocument &doc) {
 }
 
 static void output_sensor(const espnow_packet_t *pkt) {
-    StaticJsonDocument<256> doc;
+    JsonDocument doc;
     char nid[8]; snprintf(nid, sizeof(nid), "0x%04X", pkt->node_id);
     doc["v"]           = 3;
     doc["type"]        = "SENSOR";
@@ -73,7 +73,7 @@ static void output_sensor(const espnow_packet_t *pkt) {
 }
 
 static void output_heartbeat(const espnow_packet_t *pkt) {
-    StaticJsonDocument<192> doc;
+    JsonDocument doc;
     char nid[8]; snprintf(nid, sizeof(nid), "0x%04X", pkt->node_id);
     doc["v"]         = 3;
     doc["type"]      = "HEARTBEAT";
@@ -86,7 +86,7 @@ static void output_heartbeat(const espnow_packet_t *pkt) {
 }
 
 static void output_hello(const espnow_packet_t *pkt) {
-    StaticJsonDocument<192> doc;
+    JsonDocument doc;
     char nid[8]; snprintf(nid, sizeof(nid), "0x%04X", pkt->node_id);
     doc["v"]           = 3;
     doc["type"]        = "HELLO";
@@ -149,7 +149,7 @@ static char   s_buf[512];
 static size_t s_buf_len = 0;
 
 static void process_cmd(const char *str) {
-    StaticJsonDocument<512> doc;
+    JsonDocument doc;
     if (deserializeJson(doc, str) != DeserializationError::Ok) {
         ESP_LOGW(TAG, "Bad JSON: %.80s", str);
         return;
@@ -202,7 +202,7 @@ void setup(void) {
     uint8_t mac[6];
     WiFi.macAddress(mac);
 
-    StaticJsonDocument<128> doc;
+    JsonDocument doc;
     char mac_str[20];
     snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
