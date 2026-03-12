@@ -1,0 +1,26 @@
+# ── Build artifacts ───────────────────────────────────────────────────────────
+.pio/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# ── Reference / archive (kept locally, not tracked) ──────────────────────────
+.delete/
+.docs_reference-old/
+.reference_keep/
+*_old/
+*_bak/
+
+# ── Secrets / env ─────────────────────────────────────────────────────────────
+.env
+*.env
+secrets.yaml
+
+# ── Editor ────────────────────────────────────────────────────────────────────
+.vscode/settings.json
+*.swp
+*.swo
+.DS_Store
