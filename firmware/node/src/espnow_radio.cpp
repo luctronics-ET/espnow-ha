@@ -31,7 +31,8 @@ static void on_recv(const esp_now_recv_info_t *info, const uint8_t *data, int le
     if (s_recv_cb) s_recv_cb(&pkt, info->src_addr);
 }
 
-static void on_send(const uint8_t *mac, esp_now_send_status_t status) {
+// ESP-IDF v5+: send cb receives wifi_tx_info_t* instead of uint8_t* MAC
+static void on_send(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
     if (s_send_done_cb) s_send_done_cb(status == ESP_NOW_SEND_SUCCESS);
 }
 
