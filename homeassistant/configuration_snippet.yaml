@@ -12,15 +12,16 @@
 #     automations.yaml
 #     dashboard.yaml
 #     aguada/
-#       mqtt_sensors.yaml        ← sensores MQTT (state_class adicionado)
+#       mqtt_gateway_sensors.yaml ← sensores do gateway (manual)
 #       template_sensors.yaml    ← agregados, consumo 24h, binários de vazamento
 #       statistics_sensors.yaml  ← plataforma statistics (min/max/taxa/média)
+#
+# Sensores de reservatórios (CON/CAV/CB*/CIE*) são criados por MQTT Discovery
+# publicado pelo bridge.py e não precisam de lista manual em YAML.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── Pacote Aguada (inclui mqtt sensors) ───────────────────────────────────────
-homeassistant:
-  packages:
-    aguada: !include aguada/mqtt_sensors.yaml
+# ── MQTT sensors (gateway manual + reservatórios por discovery) ──────────────
+mqtt: !include aguada/mqtt_gateway_sensors.yaml
 
 # ── Sensores estatísticos (statistics platform) ───────────────────────────────
 # Alimentam template_sensors.yaml com min/max/taxa/média
@@ -48,9 +49,12 @@ recorder:
 
 # ── Troubleshooting rápido ─────────────────────────────────────────────────────
 # Erro comum: usar extensão incorreta no include
-#   ERRADO: mqtt: !include mqtt_sensors.yam
-#   CERTO : mqtt: !include mqtt_sensors.yaml
+#   ERRADO: mqtt: !include mqtt_gateway_sensors.yam
+#   CERTO : mqtt: !include mqtt_gateway_sensors.yaml
 #
-# Erro comum: caminho inválido
-#   ERRADO: !include homeassistant/mqtt_sensors.yaml
-#   CERTO : !include aguada/mqtt_sensors.yaml
+# Erro comum: usar packages para arquivo no formato mqtt:sensor
+#   ERRADO:
+#     homeassistant:
+#       packages:
+#         aguada: !include aguada/mqtt_sensors.yaml
+#   CERTO : mqtt: !include aguada/mqtt_gateway_sensors.yaml

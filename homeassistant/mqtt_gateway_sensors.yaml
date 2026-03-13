@@ -1,0 +1,32 @@
+# Aguada — Sensores MQTT do Gateway (manual YAML)
+#
+# Os sensores de reservatórios (CON/CAV/CB*/CIE*) devem vir por MQTT Discovery
+# publicado pelo bridge.py no tópico homeassistant/sensor/.../config.
+#
+# Este arquivo mantém apenas sensores de status/evento do gateway.
+
+discovery: true
+
+sensor:
+  - name: "Gateway Status"
+    unique_id: aguada_gateway_status
+    state_topic: aguada/gateway/status
+    icon: mdi:router-wireless
+
+  - name: "Gateway OTA Evento"
+    unique_id: aguada_gateway_ota_evento
+    state_topic: aguada/gateway/ota
+    value_template: "{{ value_json.event | default('unknown') }}"
+    icon: mdi:update
+
+  - name: "Gateway OTA Erro"
+    unique_id: aguada_gateway_ota_erro
+    state_topic: aguada/gateway/ota
+    value_template: "{{ value_json.error if value_json.error is defined else 0 }}"
+    icon: mdi:alert-circle-outline
+
+  - name: "Gateway Firmware"
+    unique_id: aguada_gateway_firmware
+    state_topic: aguada/gateway/info
+    value_template: "{{ value_json.fw_version | default('unknown') }}"
+    icon: mdi:tag

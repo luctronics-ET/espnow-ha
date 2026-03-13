@@ -1,15 +1,13 @@
-# Aguada — MQTT Discovery Sensors
+# Aguada — MQTT Sensors (LEGADO)
+#
+# ⚠️ Este arquivo é legado e pode gerar entidades duplicadas se usado junto com
+# MQTT Discovery do bridge.py. Prefira usar apenas discovery para reservatórios
+# e mantenha manualmente só os sensores do gateway em mqtt_gateway_sensors.yaml.
 # Conforme NODES_INVENTARIO.md v2.2
 # Versão: 3.0 — state_class adicionado para estatísticas de longo prazo
 #
-# Inclua em configuration.yaml:
-#   # Se o arquivo estiver em /config/aguada/mqtt_sensors.yaml
-#   homeassistant:
-#     packages:
-#       aguada: !include aguada/mqtt_sensors.yaml
-#
-#   # Ou, se estiver direto em /config/mqtt_sensors.yaml
-#   # mqtt: !include mqtt_sensors.yaml
+# Este arquivo é mantido apenas como referência histórica.
+# Não inclua no configuration.yaml em instalações novas.
 #
 # Tópicos:
 #   NODE-01 (CON)   → aguada/node/1/telemetry      (ESPHome direto)

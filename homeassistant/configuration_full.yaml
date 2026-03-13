@@ -19,9 +19,11 @@ default_config:
 logger:
   default: warning
 
-# MQTT + Discovery de sensores Aguada
+# MQTT do Aguada
+# - Sensores de reservatórios: MQTT Discovery (publicado pelo bridge.py)
+# - Sensores de gateway: include manual abaixo
 # Arquivos incluídos devem estar em /config (mesma pasta do configuration.yaml)
-mqtt: !include mqtt_sensors.yaml
+mqtt: !include mqtt_gateway_sensors.yaml
 
 # Statistics sensors (min/max/taxa/médias)
 sensor: !include statistics_sensors.yaml
@@ -63,5 +65,5 @@ recorder:
 # ---------------------------------------------------------------------------
 # Troubleshooting
 # ---------------------------------------------------------------------------
-# ERRADO: mqtt: !include mqtt_sensors.yam
-# CERTO : mqtt: !include mqtt_sensors.yaml
+# ERRADO: mqtt: !include mqtt_gateway_sensors.yam
+# CERTO : mqtt: !include mqtt_gateway_sensors.yaml
