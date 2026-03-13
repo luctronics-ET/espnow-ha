@@ -1,0 +1,1084 @@
+title: AGUADA V3 — Home Assistant
+views:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 1: VISÃO GERAL
+  # Resumo do sistema, gauges de todos os reservatórios, alertas
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: Visão Geral
+    path: visao-geral
+    icon: mdi:water
+    badges:
+      - entity: sensor.aguada_volume_total_pct
+        name: Sistema %
+      - entity: binary_sensor.aguada_alarme_vazamento
+        name: Vazamento
+      - entity: binary_sensor.aguada_alarme_nivel_critico
+        name: Nível crítico
+      - entity: sensor.aguada_gateway_status
+        name: Gateway
+    cards:
+
+      # ── Alerta de Gateway Offline (visível só quando offline) ─────────────
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.aguada_gateway_status
+            state: "offline"
+        card:
+          type: markdown
+          content: >
+            ## 🔴 ALERTA — GATEWAY OFFLINE
+            O gateway ESP32 está sem comunicação com o broker MQTT.
+            Verifique energia, rede e conectividade do gateway.
+
+      # ── Alerta de Vazamento (visível só quando ativo) ──────────────────────
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.aguada_alarme_vazamento
+            state: "on"
+        card:
+          type: markdown
+          content: >
+            ## 🚨 ALERTA — VAZAMENTO DETECTADO
+            Um ou mais reservatórios apresentam queda anormal de volume.
+            Verifique imediatamente a aba **Vazamentos**.
+
+      # ── Alerta de Nível Crítico (visível só quando ativo) ──────────────────
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.aguada_alarme_nivel_critico
+            state: "on"
+        card:
+          type: markdown
+          content: >
+            ## ⚠️ ALERTA — NÍVEL CRÍTICO (< 10%)
+            Um ou mais reservatórios estão com nível crítico de água.
+
+      # ── Status do Gateway ──────────────────────────────────────────────────
+      - type: entity
+        entity: sensor.aguada_gateway_status
+        name: Gateway ESP32
+        icon: mdi:router-wireless
+
+      # ── Volume Total do Sistema ────────────────────────────────────────────
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.aguada_volume_total
+            name: Volume Total
+            min: 0
+            max: 730
+            unit: "m³"
+            needle: true
+            severity:
+              green: 292
+              yellow: 146
+              red: 73
+          - type: gauge
+            entity: sensor.aguada_volume_total_pct
+            name: Sistema %
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+
+      # ── Resumo de métricas chave ────────────────────────────────────────────
+      - type: entities
+        title: Resumo do Sistema
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_volume_total
+            name: Volume total armazenado
+            icon: mdi:water-well
+          - entity: sensor.aguada_volume_total_pct
+            name: Ocupação total %
+            icon: mdi:water-percent
+          - entity: sensor.aguada_cisternas_volume
+            name: Cisternas (CIE1+CIE2)
+            icon: mdi:water-pump
+          - entity: sensor.aguada_cb03_pct
+            name: Casa de Bombas N3 %
+            icon: mdi:pump
+          - entity: sensor.aguada_consumo_total_24h
+            name: Variação total 24h
+            icon: mdi:water-minus
+          - entity: binary_sensor.aguada_alarme_vazamento
+            name: Alarme de Vazamento
+            icon: mdi:pipe-leak
+          - entity: binary_sensor.aguada_alarme_nivel_critico
+            name: Alarme Nível Crítico
+            icon: mdi:alert-circle
+
+      # ── Gauges — Castelos ──────────────────────────────────────────────────
+      - type: markdown
+        content: "### 🏰 Castelos"
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.aguada_con_pct
+            name: CON — Consumo
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+          - type: gauge
+            entity: sensor.aguada_cav_pct
+            name: CAV — Incêndio
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+
+      # ── Gauges — Bombas N3 ─────────────────────────────────────────────────
+      - type: markdown
+        content: "### ⚙️ Casa de Bombas N3"
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.aguada_cb31_pct
+            name: CB31
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+          - type: gauge
+            entity: sensor.aguada_cb32_pct
+            name: CB32
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+          - type: gauge
+            entity: sensor.aguada_cb03_pct
+            name: CB03 (total)
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+
+      # ── Gauges — Cisternas ─────────────────────────────────────────────────
+      - type: markdown
+        content: "### 💧 Cisternas"
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.aguada_cie1_pct
+            name: CIE1
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+          - type: gauge
+            entity: sensor.aguada_cie2_pct
+            name: CIE2
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+          - type: gauge
+            entity: sensor.aguada_cisternas_pct
+            name: Cisternas (total)
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+
+      # ── Evolução 24h — todos os reservatórios ─────────────────────────────
+      - type: history-graph
+        title: Evolução de Volume % — últimas 24h
+        hours_to_show: 24
+        entities:
+          - entity: sensor.aguada_con_pct
+            name: CON
+          - entity: sensor.aguada_cav_pct
+            name: CAV
+          - entity: sensor.aguada_cb31_pct
+            name: CB31
+          - entity: sensor.aguada_cb32_pct
+            name: CB32
+          - entity: sensor.aguada_cie1_pct
+            name: CIE1
+          - entity: sensor.aguada_cie2_pct
+            name: CIE2
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 2: CONSUMO & TENDÊNCIAS
+  # Consumo diário estimado, médias semanais, taxa de variação
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: Consumo
+    path: consumo
+    icon: mdi:chart-bar
+    badges: []
+    cards:
+
+      # ── Consumo estimado hoje por reservatório ─────────────────────────────
+      - type: entities
+        title: Variação de Volume nas Últimas 24h (max − min)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_con_consumo_24h
+            name: CON — Castelo de Consumo
+            icon: mdi:water-minus
+          - entity: sensor.aguada_cav_consumo_24h
+            name: CAV — Castelo de Incêndio
+            icon: mdi:water-minus
+          - entity: sensor.aguada_cb31_consumo_24h
+            name: CB31 — Bombas N3.1
+            icon: mdi:water-minus
+          - entity: sensor.aguada_cb32_consumo_24h
+            name: CB32 — Bombas N3.2
+            icon: mdi:water-minus
+          - entity: sensor.aguada_cie1_consumo_24h
+            name: CIE1 — Cisterna
+            icon: mdi:water-minus
+          - entity: sensor.aguada_cie2_consumo_24h
+            name: CIE2 — Cisterna
+            icon: mdi:water-minus
+          - type: divider
+          - entity: sensor.aguada_consumo_total_24h
+            name: TOTAL VARIADO
+            icon: mdi:sigma
+
+      # ── Médias 7 dias por grupo ────────────────────────────────────────────
+      - type: entities
+        title: Nível Médio — Últimos 7 Dias
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_con_media_7d
+            name: CON — Média 7d
+            icon: mdi:chart-line
+          - entity: sensor.aguada_cav_media_7d
+            name: CAV — Média 7d
+            icon: mdi:chart-line
+          - entity: sensor.aguada_cb03_media_7d
+            name: CB03 — Média 7d
+            icon: mdi:chart-line
+          - entity: sensor.aguada_cisternas_media_7d
+            name: Cisternas — Média 7d
+            icon: mdi:chart-line
+
+      # ── Taxa de variação atual ─────────────────────────────────────────────
+      - type: entities
+        title: Taxa de Variação Atual (L/h) — janela 2h
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_con_taxa_variacao
+            name: CON
+          - entity: sensor.aguada_cav_taxa_variacao
+            name: CAV
+          - entity: sensor.aguada_cb31_taxa_variacao
+            name: CB31
+          - entity: sensor.aguada_cb32_taxa_variacao
+            name: CB32
+          - entity: sensor.aguada_cie1_taxa_variacao
+            name: CIE1
+          - entity: sensor.aguada_cie2_taxa_variacao
+            name: CIE2
+
+      # ── Tendência 7 dias — Castelos ────────────────────────────────────────
+      - type: history-graph
+        title: Tendência CON / CAV — 7 dias
+        hours_to_show: 168
+        entities:
+          - entity: sensor.aguada_con_pct
+            name: CON %
+          - entity: sensor.aguada_cav_pct
+            name: CAV %
+
+      # ── Tendência 7 dias — Bombas + Cisternas ─────────────────────────────
+      - type: history-graph
+        title: Tendência CB31/CB32 / CIE1/CIE2 — 7 dias
+        hours_to_show: 168
+        entities:
+          - entity: sensor.aguada_cb31_pct
+            name: CB31 %
+          - entity: sensor.aguada_cb32_pct
+            name: CB32 %
+          - entity: sensor.aguada_cie1_pct
+            name: CIE1 %
+          - entity: sensor.aguada_cie2_pct
+            name: CIE2 %
+
+      # ── Estatísticas diárias — Volume (requer state_class configurado) ─────
+      - type: statistic-graph
+        title: CON — Volume Diário (m³) — 7 dias
+        entities:
+          - entity: sensor.aguada_con_volume
+            name: CON
+        period:
+          calendar:
+            period: day
+        stat_types:
+          - min
+          - max
+          - mean
+
+      - type: statistic-graph
+        title: CIE1+CIE2 — Volume Diário — 7 dias
+        entities:
+          - entity: sensor.aguada_cie1_volume
+            name: CIE1
+          - entity: sensor.aguada_cie2_volume
+            name: CIE2
+        period:
+          calendar:
+            period: day
+        stat_types:
+          - min
+          - max
+          - mean
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 3: DETECÇÃO DE VAZAMENTO
+  # Status por reservatório, taxa de variação, gráficos de taxa
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: Vazamentos
+    path: vazamentos
+    icon: mdi:pipe-leak
+    badges: []
+    cards:
+
+      # ── Alarme mestre ──────────────────────────────────────────────────────
+      - type: entity
+        entity: binary_sensor.aguada_alarme_vazamento
+        name: Alarme de Vazamento — Sistema
+        icon: mdi:pipe-leak
+
+      # ── Status por reservatório ────────────────────────────────────────────
+      - type: horizontal-stack
+        cards:
+          - type: entity
+            entity: binary_sensor.aguada_con_vazamento
+            name: CON
+            icon: mdi:pipe-leak
+          - type: entity
+            entity: binary_sensor.aguada_cav_vazamento
+            name: CAV
+            icon: mdi:pipe-leak
+          - type: entity
+            entity: binary_sensor.aguada_cb31_vazamento
+            name: CB31
+            icon: mdi:pipe-leak
+
+      - type: horizontal-stack
+        cards:
+          - type: entity
+            entity: binary_sensor.aguada_cb32_vazamento
+            name: CB32
+            icon: mdi:pipe-leak
+          - type: entity
+            entity: binary_sensor.aguada_cie1_vazamento
+            name: CIE1
+            icon: mdi:pipe-leak
+          - type: entity
+            entity: binary_sensor.aguada_cie2_vazamento
+            name: CIE2
+            icon: mdi:pipe-leak
+
+      # ── Tabela de limiares de vazamento ───────────────────────────────────
+      - type: markdown
+        content: >
+          ### Limiares de Detecção (queda sustentada por 2h)
+
+          | Reservatório | Capacidade | Limiar de Alarme |
+          |---|---|---|
+          | CON / CAV | 80.000 L | > 4.000 L/h |
+          | CB31 / CB32 | 40.000 L | > 2.000 L/h |
+          | CIE1 / CIE2 | 245.000 L | > 12.250 L/h |
+
+          *Limiar = 5% da capacidade por hora de perda contínua.*
+
+      # ── Taxa de variação atual ─────────────────────────────────────────────
+      - type: entities
+        title: Taxa de Variação Atual (L/h)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_con_taxa_variacao
+            name: CON
+          - entity: sensor.aguada_cav_taxa_variacao
+            name: CAV
+          - entity: sensor.aguada_cb31_taxa_variacao
+            name: CB31
+          - entity: sensor.aguada_cb32_taxa_variacao
+            name: CB32
+          - entity: sensor.aguada_cie1_taxa_variacao
+            name: CIE1
+          - entity: sensor.aguada_cie2_taxa_variacao
+            name: CIE2
+
+      # ── Gráfico de taxa de variação (castelos) ────────────────────────────
+      - type: history-graph
+        title: Taxa de Variação CON / CAV — 12h
+        hours_to_show: 12
+        entities:
+          - entity: sensor.aguada_con_taxa_variacao
+            name: CON (L/h)
+          - entity: sensor.aguada_cav_taxa_variacao
+            name: CAV (L/h)
+
+      # ── Gráfico de nível com zoom (24h) para detecção visual ─────────────
+      - type: history-graph
+        title: Volume CON — 48h (detecção visual)
+        hours_to_show: 48
+        entities:
+          - entity: sensor.aguada_con_volume
+            name: CON (L)
+
+      - type: history-graph
+        title: Volume CIE1/CIE2 — 48h
+        hours_to_show: 48
+        entities:
+          - entity: sensor.aguada_cie1_volume
+            name: CIE1 (L)
+          - entity: sensor.aguada_cie2_volume
+            name: CIE2 (L)
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 4: CASTELOS — CON / CAV
+  # Detalhe completo dos castelos de consumo e incêndio
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: Castelos
+    path: castelos
+    icon: mdi:castle
+    badges: []
+    cards:
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.aguada_con_pct
+            name: CON %
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+          - type: gauge
+            entity: sensor.aguada_cav_pct
+            name: CAV %
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+
+      - type: entities
+        title: CON — Castelo de Consumo (80m³)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_con_nivel
+            name: Nível (cm)
+          - entity: sensor.aguada_con_volume
+            name: Volume (L)
+          - entity: sensor.aguada_con_pct
+            name: Volume %
+          - entity: sensor.aguada_con_distancia
+            name: Distância sensor
+          - entity: sensor.aguada_con_consumo_24h
+            name: Variação 24h (L)
+          - entity: sensor.aguada_con_taxa_variacao
+            name: Taxa atual (L/h)
+          - entity: sensor.aguada_con_media_7d
+            name: Média 7 dias %
+          - type: divider
+          - entity: sensor.aguada_con_bateria
+            name: Bateria (V)
+          - entity: sensor.aguada_con_rssi
+            name: RSSI (dBm)
+          - entity: binary_sensor.aguada_con_vazamento
+            name: Detecção vazamento
+
+      - type: entities
+        title: CAV — Castelo de Incêndio (80m³)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_cav_nivel
+            name: Nível (cm)
+          - entity: sensor.aguada_cav_volume
+            name: Volume (L)
+          - entity: sensor.aguada_cav_pct
+            name: Volume %
+          - entity: sensor.aguada_cav_distancia
+            name: Distância sensor
+          - entity: sensor.aguada_cav_consumo_24h
+            name: Variação 24h (L)
+          - entity: sensor.aguada_cav_taxa_variacao
+            name: Taxa atual (L/h)
+          - entity: sensor.aguada_cav_media_7d
+            name: Média 7 dias %
+          - type: divider
+          - entity: sensor.aguada_cav_bateria
+            name: Bateria (V)
+          - entity: sensor.aguada_cav_rssi
+            name: RSSI (dBm)
+          - entity: binary_sensor.aguada_cav_vazamento
+            name: Detecção vazamento
+
+      - type: history-graph
+        title: CON / CAV — Volume % — 48h
+        hours_to_show: 48
+        entities:
+          - entity: sensor.aguada_con_pct
+            name: CON %
+          - entity: sensor.aguada_cav_pct
+            name: CAV %
+
+      - type: history-graph
+        title: CON / CAV — Volume absoluto (L) — 7 dias
+        hours_to_show: 168
+        entities:
+          - entity: sensor.aguada_con_volume
+            name: CON (L)
+          - entity: sensor.aguada_cav_volume
+            name: CAV (L)
+
+      - type: statistic-graph
+        title: CON — Estatísticas Diárias (min/média/max)
+        entities:
+          - entity: sensor.aguada_con_pct
+            name: CON %
+        period:
+          calendar:
+            period: day
+        stat_types:
+          - min
+          - mean
+          - max
+
+      - type: statistic-graph
+        title: CAV — Estatísticas Diárias (min/média/max)
+        entities:
+          - entity: sensor.aguada_cav_pct
+            name: CAV %
+        period:
+          calendar:
+            period: day
+        stat_types:
+          - min
+          - mean
+          - max
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 5: BOMBAS N3 — CB31 / CB32
+  # Casa de Bombas que alimenta os castelos a partir das cisternas
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: Bombas N3
+    path: bombas
+    icon: mdi:pump
+    badges: []
+    cards:
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.aguada_cb31_pct
+            name: CB31 %
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+          - type: gauge
+            entity: sensor.aguada_cb32_pct
+            name: CB32 %
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+          - type: gauge
+            entity: sensor.aguada_cb03_pct
+            name: CB03 Total %
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+
+      - type: entities
+        title: CB31 — Casa de Bombas N3.1 (40m³)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_cb31_nivel
+            name: Nível (cm)
+          - entity: sensor.aguada_cb31_volume
+            name: Volume (L)
+          - entity: sensor.aguada_cb31_pct
+            name: Volume %
+          - entity: sensor.aguada_cb31_distancia
+            name: Distância sensor
+          - entity: sensor.aguada_cb31_consumo_24h
+            name: Variação 24h (L)
+          - entity: sensor.aguada_cb31_taxa_variacao
+            name: Taxa atual (L/h)
+          - type: divider
+          - entity: sensor.aguada_cb31_bateria
+            name: Bateria (V)
+          - entity: sensor.aguada_cb31_rssi
+            name: RSSI (dBm)
+          - entity: binary_sensor.aguada_cb31_vazamento
+            name: Detecção vazamento
+
+      - type: entities
+        title: CB32 — Casa de Bombas N3.2 (40m³)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_cb32_nivel
+            name: Nível (cm)
+          - entity: sensor.aguada_cb32_volume
+            name: Volume (L)
+          - entity: sensor.aguada_cb32_pct
+            name: Volume %
+          - entity: sensor.aguada_cb32_distancia
+            name: Distância sensor
+          - entity: sensor.aguada_cb32_consumo_24h
+            name: Variação 24h (L)
+          - entity: sensor.aguada_cb32_taxa_variacao
+            name: Taxa atual (L/h)
+          - type: divider
+          - entity: sensor.aguada_cb32_bateria
+            name: Bateria (V)
+          - entity: sensor.aguada_cb32_rssi
+            name: RSSI (dBm)
+          - entity: binary_sensor.aguada_cb32_vazamento
+            name: Detecção vazamento
+
+      - type: entities
+        title: CB03 — Casa de Bombas N3 (Total 80m³)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_cb03_volume
+            name: Volume total (L)
+          - entity: sensor.aguada_cb03_pct
+            name: Volume total %
+          - entity: sensor.aguada_cb03_media_7d
+            name: Média 7 dias %
+
+      - type: history-graph
+        title: CB31 / CB32 — Volume % — 48h
+        hours_to_show: 48
+        entities:
+          - entity: sensor.aguada_cb31_pct
+            name: CB31 %
+          - entity: sensor.aguada_cb32_pct
+            name: CB32 %
+
+      - type: history-graph
+        title: CB31 / CB32 — Volume % — 7 dias
+        hours_to_show: 168
+        entities:
+          - entity: sensor.aguada_cb31_pct
+            name: CB31 %
+          - entity: sensor.aguada_cb32_pct
+            name: CB32 %
+
+      - type: statistic-graph
+        title: CB31/CB32 — Estatísticas Diárias
+        entities:
+          - entity: sensor.aguada_cb31_pct
+            name: CB31 %
+          - entity: sensor.aguada_cb32_pct
+            name: CB32 %
+        period:
+          calendar:
+            period: day
+        stat_types:
+          - min
+          - mean
+          - max
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 6: CISTERNAS — CIE1 / CIE2
+  # Reservatórios de entrada da ilha (245m³ cada)
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: Cisternas
+    path: cisternas
+    icon: mdi:water-pump
+    badges: []
+    cards:
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.aguada_cie1_pct
+            name: CIE1 %
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+          - type: gauge
+            entity: sensor.aguada_cie2_pct
+            name: CIE2 %
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+          - type: gauge
+            entity: sensor.aguada_cisternas_pct
+            name: Total %
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+
+      - type: entities
+        title: CIE1 — Cisterna 1 (245m³)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_cie1_nivel
+            name: Nível (cm)
+          - entity: sensor.aguada_cie1_volume
+            name: Volume (L)
+          - entity: sensor.aguada_cie1_pct
+            name: Volume %
+          - entity: sensor.aguada_cie1_distancia
+            name: Distância sensor
+          - entity: sensor.aguada_cie1_consumo_24h
+            name: Variação 24h (L)
+          - entity: sensor.aguada_cie1_taxa_variacao
+            name: Taxa atual (L/h)
+          - type: divider
+          - entity: sensor.aguada_cie1_bateria
+            name: Bateria (V)
+          - entity: sensor.aguada_cie1_rssi
+            name: RSSI (dBm)
+          - entity: binary_sensor.aguada_cie1_vazamento
+            name: Detecção vazamento
+
+      - type: entities
+        title: CIE2 — Cisterna 2 (245m³)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_cie2_nivel
+            name: Nível (cm)
+          - entity: sensor.aguada_cie2_volume
+            name: Volume (L)
+          - entity: sensor.aguada_cie2_pct
+            name: Volume %
+          - entity: sensor.aguada_cie2_distancia
+            name: Distância sensor
+          - entity: sensor.aguada_cie2_consumo_24h
+            name: Variação 24h (L)
+          - entity: sensor.aguada_cie2_taxa_variacao
+            name: Taxa atual (L/h)
+          - type: divider
+          - entity: sensor.aguada_cie2_bateria
+            name: Bateria (V)
+          - entity: sensor.aguada_cie2_rssi
+            name: RSSI (dBm)
+          - entity: binary_sensor.aguada_cie2_vazamento
+            name: Detecção vazamento
+
+      - type: entities
+        title: Cisternas — Resumo (490m³ total)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_cisternas_volume
+            name: Volume total (m³)
+          - entity: sensor.aguada_cisternas_pct
+            name: Ocupação %
+          - entity: sensor.aguada_cisternas_media_7d
+            name: Média 7 dias %
+
+      - type: history-graph
+        title: CIE1 / CIE2 — Volume % — 48h
+        hours_to_show: 48
+        entities:
+          - entity: sensor.aguada_cie1_pct
+            name: CIE1 %
+          - entity: sensor.aguada_cie2_pct
+            name: CIE2 %
+
+      - type: history-graph
+        title: CIE1 / CIE2 — Volume % — 7 dias
+        hours_to_show: 168
+        entities:
+          - entity: sensor.aguada_cie1_pct
+            name: CIE1 %
+          - entity: sensor.aguada_cie2_pct
+            name: CIE2 %
+
+      - type: statistic-graph
+        title: CIE1/CIE2 — Estatísticas Diárias
+        entities:
+          - entity: sensor.aguada_cie1_pct
+            name: CIE1 %
+          - entity: sensor.aguada_cie2_pct
+            name: CIE2 %
+        period:
+          calendar:
+            period: day
+        stat_types:
+          - min
+          - mean
+          - max
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 7: SISTEMA — DIAGNÓSTICO
+  # Gateway, baterias, RSSI, status de conectividade
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: Sistema
+    path: sistema
+    icon: mdi:cog
+    badges: []
+    cards:
+
+      # ── Gateway ────────────────────────────────────────────────────────────
+      - type: entity
+        entity: sensor.aguada_gateway_status
+        name: Gateway ESP32 — Status
+        icon: mdi:router-wireless
+
+      # ── Baterias / Tensão de alimentação ──────────────────────────────────
+      - type: entities
+        title: Tensão de Alimentação (V)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_con_bateria
+            name: NODE-01 CON
+          - entity: sensor.aguada_cav_bateria
+            name: NODE-02 CAV
+          - entity: sensor.aguada_cb31_bateria
+            name: NODE-03 CB31
+          - entity: sensor.aguada_cb32_bateria
+            name: NODE-03 CB32
+          - entity: sensor.aguada_cie1_bateria
+            name: NODE-04 CIE1
+          - entity: sensor.aguada_cie2_bateria
+            name: NODE-04 CIE2
+
+      # ── RSSI (qualidade do sinal ESP-NOW) ──────────────────────────────────
+      - type: entities
+        title: Qualidade do Sinal ESP-NOW (dBm)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_con_rssi
+            name: NODE-01 CON
+          - entity: sensor.aguada_cav_rssi
+            name: NODE-02 CAV
+          - entity: sensor.aguada_cb31_rssi
+            name: NODE-03 CB31
+          - entity: sensor.aguada_cb32_rssi
+            name: NODE-03 CB32
+          - entity: sensor.aguada_cie1_rssi
+            name: NODE-04 CIE1
+          - entity: sensor.aguada_cie2_rssi
+            name: NODE-04 CIE2
+
+      # ── Histórico de sinal ─────────────────────────────────────────────────
+      - type: history-graph
+        title: RSSI dos Nodes — 24h
+        hours_to_show: 24
+        entities:
+          - entity: sensor.aguada_con_rssi
+            name: CON
+          - entity: sensor.aguada_cav_rssi
+            name: CAV
+          - entity: sensor.aguada_cb31_rssi
+            name: CB31
+          - entity: sensor.aguada_cb32_rssi
+            name: CB32
+          - entity: sensor.aguada_cie1_rssi
+            name: CIE1
+          - entity: sensor.aguada_cie2_rssi
+            name: CIE2
+
+      # ── Histórico de tensão ────────────────────────────────────────────────
+      - type: history-graph
+        title: Tensão de Alimentação dos Nodes — 7 dias
+        hours_to_show: 168
+        entities:
+          - entity: sensor.aguada_con_bateria
+            name: CON (V)
+          - entity: sensor.aguada_cav_bateria
+            name: CAV (V)
+          - entity: sensor.aguada_cb31_bateria
+            name: CB31 (V)
+          - entity: sensor.aguada_cb32_bateria
+            name: CB32 (V)
+          - entity: sensor.aguada_cie1_bateria
+            name: CIE1 (V)
+          - entity: sensor.aguada_cie2_bateria
+            name: CIE2 (V)
+
+      # ── Estado operacional geral ──────────────────────────────────────────
+      - type: entities
+        title: Estado Operacional
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_gateway_status
+            name: Gateway
+          - entity: binary_sensor.aguada_alarme_vazamento
+            name: Alarme de vazamento (master)
+          - entity: binary_sensor.aguada_alarme_nivel_critico
+            name: Alarme de nível crítico (master)
+
+      # ── Distâncias brutas para diagnóstico de sensor ──────────────────────
+      - type: entities
+        title: Distâncias Brutas do Sensor (cm)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_con_distancia
+            name: CON
+          - entity: sensor.aguada_cav_distancia
+            name: CAV
+          - entity: sensor.aguada_cb31_distancia
+            name: CB31
+          - entity: sensor.aguada_cb32_distancia
+            name: CB32
+          - entity: sensor.aguada_cie1_distancia
+            name: CIE1
+          - entity: sensor.aguada_cie2_distancia
+            name: CIE2
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 8: MOBILE — RESUMO RÁPIDO
+  # Versão compacta para celular (menos rolagem, foco operacional)
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: Mobile
+    path: mobile
+    icon: mdi:cellphone
+    badges:
+      - entity: sensor.aguada_volume_total_pct
+        name: Sistema %
+      - entity: sensor.aguada_gateway_status
+        name: Gateway
+      - entity: binary_sensor.aguada_alarme_vazamento
+        name: Vazamento
+    cards:
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.aguada_gateway_status
+            state: "offline"
+        card:
+          type: markdown
+          content: "## 🔴 Gateway offline"
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.aguada_alarme_vazamento
+            state: "on"
+        card:
+          type: markdown
+          content: "## 🚨 Vazamento detectado"
+
+      - type: entities
+        title: Estado Rápido
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_gateway_status
+            name: Gateway
+          - entity: sensor.aguada_volume_total
+            name: Volume total (m³)
+          - entity: sensor.aguada_volume_total_pct
+            name: Sistema (%)
+          - entity: sensor.aguada_consumo_total_24h
+            name: Variação total 24h (m³)
+          - entity: binary_sensor.aguada_alarme_nivel_critico
+            name: Alarme nível crítico
+          - entity: binary_sensor.aguada_alarme_vazamento
+            name: Alarme vazamento
+
+      - type: gauge
+        entity: sensor.aguada_volume_total_pct
+        name: Sistema
+        min: 0
+        max: 100
+        unit: "%"
+        needle: true
+        severity:
+          green: 40
+          yellow: 20
+          red: 10
+
+      - type: entities
+        title: Níveis por Setor (%)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_con_pct
+            name: CON
+          - entity: sensor.aguada_cav_pct
+            name: CAV
+          - entity: sensor.aguada_cb03_pct
+            name: CB03
+          - entity: sensor.aguada_cisternas_pct
+            name: Cisternas
+
+      - type: history-graph
+        title: Tendência do Sistema — 24h
+        hours_to_show: 24
+        entities:
+          - entity: sensor.aguada_volume_total_pct
+            name: Sistema %

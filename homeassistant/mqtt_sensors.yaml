@@ -1,0 +1,470 @@
+# Aguada — MQTT Discovery Sensors
+# Conforme NODES_INVENTARIO.md v2.2
+# Versão: 3.0 — state_class adicionado para estatísticas de longo prazo
+#
+# Inclua em configuration.yaml:
+#   # Se o arquivo estiver em /config/aguada/mqtt_sensors.yaml
+#   homeassistant:
+#     packages:
+#       aguada: !include aguada/mqtt_sensors.yaml
+#
+#   # Ou, se estiver direto em /config/mqtt_sensors.yaml
+#   # mqtt: !include mqtt_sensors.yaml
+#
+# Tópicos:
+#   NODE-01 (CON)   → aguada/node/1/telemetry      (ESPHome direto)
+#   NODE-02 (CAV)   → aguada/node/2/telemetry      (Arduino Nano+Ethernet)
+#   NODE-03 (CB31)  → aguada/node/3/1/telemetry    (gateway ESP-NOW dual)
+#   NODE-03 (CB32)  → aguada/node/3/2/telemetry    (gateway ESP-NOW dual)
+#   NODE-04 (CIE1)  → aguada/node/4/1/telemetry    (gateway ESP-NOW dual)
+#   NODE-04 (CIE2)  → aguada/node/4/2/telemetry    (gateway ESP-NOW dual)
+#
+# Capacidades (NODES_INVENTARIO v2.2):
+#   CON  → 80.000 L (80m³) | CAV  → 80.000 L (80m³)
+#   CB31 → 40.000 L (40m³) | CB32 → 40.000 L (40m³)
+#   CIE1 → 245.000 L (245m³) | CIE2 → 245.000 L (245m³)
+#   Total sensoriado: 730.000 L (730m³)
+
+sensor:
+
+    # ── NODE-01: CON — Castelo de Consumo (80m³, 450cm, offset 20cm) ──────────
+    - name: "CON Distância"
+      unique_id: aguada_con_distancia
+      state_topic: aguada/node/1/telemetry
+      value_template: "{{ value_json.distance_cm }}"
+      unit_of_measurement: cm
+      device_class: distance
+      state_class: measurement
+      icon: mdi:ruler
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CON Nível"
+      unique_id: aguada_con_nivel
+      state_topic: aguada/node/1/telemetry
+      value_template: "{{ value_json.level_cm }}"
+      unit_of_measurement: cm
+      state_class: measurement
+      icon: mdi:waves-arrow-up
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CON Volume"
+      unique_id: aguada_con_volume
+      state_topic: aguada/node/1/telemetry
+      value_template: "{{ value_json.volume_l }}"
+      unit_of_measurement: L
+      state_class: measurement
+      icon: mdi:water
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CON Volume %"
+      unique_id: aguada_con_pct
+      state_topic: aguada/node/1/telemetry
+      value_template: "{{ (value_json.volume_l / 80000 * 100) | round(1) }}"
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:water-percent
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CON Bateria"
+      unique_id: aguada_con_bateria
+      state_topic: aguada/node/1/telemetry
+      value_template: "{{ (value_json.vin_mv / 1000) | round(2) }}"
+      unit_of_measurement: V
+      device_class: voltage
+      state_class: measurement
+      icon: mdi:battery
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CON RSSI"
+      unique_id: aguada_con_rssi
+      state_topic: aguada/node/1/telemetry
+      value_template: "{{ value_json.rssi }}"
+      unit_of_measurement: dBm
+      device_class: signal_strength
+      state_class: measurement
+      icon: mdi:wifi
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    # ── NODE-02: CAV — Castelo de Incêndio (80m³, 450cm, offset 20cm) ─────────
+    - name: "CAV Distância"
+      unique_id: aguada_cav_distancia
+      state_topic: aguada/node/2/telemetry
+      value_template: "{{ value_json.distance_cm }}"
+      unit_of_measurement: cm
+      device_class: distance
+      state_class: measurement
+      icon: mdi:ruler
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CAV Nível"
+      unique_id: aguada_cav_nivel
+      state_topic: aguada/node/2/telemetry
+      value_template: "{{ value_json.level_cm }}"
+      unit_of_measurement: cm
+      state_class: measurement
+      icon: mdi:waves-arrow-up
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CAV Volume"
+      unique_id: aguada_cav_volume
+      state_topic: aguada/node/2/telemetry
+      value_template: "{{ value_json.volume_l }}"
+      unit_of_measurement: L
+      state_class: measurement
+      icon: mdi:water
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CAV Volume %"
+      unique_id: aguada_cav_pct
+      state_topic: aguada/node/2/telemetry
+      value_template: "{{ (value_json.volume_l / 80000 * 100) | round(1) }}"
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:water-percent
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CAV Bateria"
+      unique_id: aguada_cav_bateria
+      state_topic: aguada/node/2/telemetry
+      value_template: "{{ (value_json.vin_mv / 1000) | round(2) }}"
+      unit_of_measurement: V
+      device_class: voltage
+      state_class: measurement
+      icon: mdi:battery
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CAV RSSI"
+      unique_id: aguada_cav_rssi
+      state_topic: aguada/node/2/telemetry
+      value_template: "{{ value_json.rssi }}"
+      unit_of_measurement: dBm
+      device_class: signal_strength
+      state_class: measurement
+      icon: mdi:wifi
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    # ── NODE-03: CB31/CB32 — Casa de Bombas N3 (2×40m³, 200cm, offset 10cm) ──
+    - name: "CB31 Distância"
+      unique_id: aguada_cb31_distancia
+      state_topic: aguada/node/3/1/telemetry
+      value_template: "{{ value_json.distance_cm }}"
+      unit_of_measurement: cm
+      device_class: distance
+      state_class: measurement
+      icon: mdi:ruler
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CB31 Nível"
+      unique_id: aguada_cb31_nivel
+      state_topic: aguada/node/3/1/telemetry
+      value_template: "{{ value_json.level_cm }}"
+      unit_of_measurement: cm
+      state_class: measurement
+      icon: mdi:waves-arrow-up
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CB31 Volume"
+      unique_id: aguada_cb31_volume
+      state_topic: aguada/node/3/1/telemetry
+      value_template: "{{ value_json.volume_l }}"
+      unit_of_measurement: L
+      state_class: measurement
+      icon: mdi:water
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CB31 Volume %"
+      unique_id: aguada_cb31_pct
+      state_topic: aguada/node/3/1/telemetry
+      value_template: "{{ (value_json.volume_l / 40000 * 100) | round(1) }}"
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:water-percent
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CB31 Bateria"
+      unique_id: aguada_cb31_bateria
+      state_topic: aguada/node/3/1/telemetry
+      value_template: "{{ (value_json.vin_mv / 1000) | round(2) }}"
+      unit_of_measurement: V
+      device_class: voltage
+      state_class: measurement
+      icon: mdi:battery
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CB31 RSSI"
+      unique_id: aguada_cb31_rssi
+      state_topic: aguada/node/3/1/telemetry
+      value_template: "{{ value_json.rssi }}"
+      unit_of_measurement: dBm
+      device_class: signal_strength
+      state_class: measurement
+      icon: mdi:wifi
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CB32 Distância"
+      unique_id: aguada_cb32_distancia
+      state_topic: aguada/node/3/2/telemetry
+      value_template: "{{ value_json.distance_cm }}"
+      unit_of_measurement: cm
+      device_class: distance
+      state_class: measurement
+      icon: mdi:ruler
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CB32 Nível"
+      unique_id: aguada_cb32_nivel
+      state_topic: aguada/node/3/2/telemetry
+      value_template: "{{ value_json.level_cm }}"
+      unit_of_measurement: cm
+      state_class: measurement
+      icon: mdi:waves-arrow-up
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CB32 Volume"
+      unique_id: aguada_cb32_volume
+      state_topic: aguada/node/3/2/telemetry
+      value_template: "{{ value_json.volume_l }}"
+      unit_of_measurement: L
+      state_class: measurement
+      icon: mdi:water
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CB32 Volume %"
+      unique_id: aguada_cb32_pct
+      state_topic: aguada/node/3/2/telemetry
+      value_template: "{{ (value_json.volume_l / 40000 * 100) | round(1) }}"
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:water-percent
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CB32 Bateria"
+      unique_id: aguada_cb32_bateria
+      state_topic: aguada/node/3/2/telemetry
+      value_template: "{{ (value_json.vin_mv / 1000) | round(2) }}"
+      unit_of_measurement: V
+      device_class: voltage
+      state_class: measurement
+      icon: mdi:battery
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CB32 RSSI"
+      unique_id: aguada_cb32_rssi
+      state_topic: aguada/node/3/2/telemetry
+      value_template: "{{ value_json.rssi }}"
+      unit_of_measurement: dBm
+      device_class: signal_strength
+      state_class: measurement
+      icon: mdi:wifi
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    # ── NODE-04: CIE1/CIE2 — Cisternas (2×245m³, 200cm, offset 10cm) ─────────
+    - name: "CIE1 Distância"
+      unique_id: aguada_cie1_distancia
+      state_topic: aguada/node/4/1/telemetry
+      value_template: "{{ value_json.distance_cm }}"
+      unit_of_measurement: cm
+      device_class: distance
+      state_class: measurement
+      icon: mdi:ruler
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CIE1 Nível"
+      unique_id: aguada_cie1_nivel
+      state_topic: aguada/node/4/1/telemetry
+      value_template: "{{ value_json.level_cm }}"
+      unit_of_measurement: cm
+      state_class: measurement
+      icon: mdi:waves-arrow-up
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CIE1 Volume"
+      unique_id: aguada_cie1_volume
+      state_topic: aguada/node/4/1/telemetry
+      value_template: "{{ value_json.volume_l }}"
+      unit_of_measurement: L
+      state_class: measurement
+      icon: mdi:water
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CIE1 Volume %"
+      unique_id: aguada_cie1_pct
+      state_topic: aguada/node/4/1/telemetry
+      value_template: "{{ (value_json.volume_l / 245000 * 100) | round(1) }}"
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:water-percent
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CIE1 Bateria"
+      unique_id: aguada_cie1_bateria
+      state_topic: aguada/node/4/1/telemetry
+      value_template: "{{ (value_json.vin_mv / 1000) | round(2) }}"
+      unit_of_measurement: V
+      device_class: voltage
+      state_class: measurement
+      icon: mdi:battery
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CIE1 RSSI"
+      unique_id: aguada_cie1_rssi
+      state_topic: aguada/node/4/1/telemetry
+      value_template: "{{ value_json.rssi }}"
+      unit_of_measurement: dBm
+      device_class: signal_strength
+      state_class: measurement
+      icon: mdi:wifi
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CIE2 Distância"
+      unique_id: aguada_cie2_distancia
+      state_topic: aguada/node/4/2/telemetry
+      value_template: "{{ value_json.distance_cm }}"
+      unit_of_measurement: cm
+      device_class: distance
+      state_class: measurement
+      icon: mdi:ruler
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CIE2 Nível"
+      unique_id: aguada_cie2_nivel
+      state_topic: aguada/node/4/2/telemetry
+      value_template: "{{ value_json.level_cm }}"
+      unit_of_measurement: cm
+      state_class: measurement
+      icon: mdi:waves-arrow-up
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CIE2 Volume"
+      unique_id: aguada_cie2_volume
+      state_topic: aguada/node/4/2/telemetry
+      value_template: "{{ value_json.volume_l }}"
+      unit_of_measurement: L
+      state_class: measurement
+      icon: mdi:water
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CIE2 Volume %"
+      unique_id: aguada_cie2_pct
+      state_topic: aguada/node/4/2/telemetry
+      value_template: "{{ (value_json.volume_l / 245000 * 100) | round(1) }}"
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:water-percent
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CIE2 Bateria"
+      unique_id: aguada_cie2_bateria
+      state_topic: aguada/node/4/2/telemetry
+      value_template: "{{ (value_json.vin_mv / 1000) | round(2) }}"
+      unit_of_measurement: V
+      device_class: voltage
+      state_class: measurement
+      icon: mdi:battery
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    - name: "CIE2 RSSI"
+      unique_id: aguada_cie2_rssi
+      state_topic: aguada/node/4/2/telemetry
+      value_template: "{{ value_json.rssi }}"
+      unit_of_measurement: dBm
+      device_class: signal_strength
+      state_class: measurement
+      icon: mdi:wifi
+      availability_topic: aguada/gateway/status
+      payload_available: online
+      payload_not_available: offline
+
+    # ── Gateway ───────────────────────────────────────────────────────────────
+    - name: "Gateway Status"
+      unique_id: aguada_gateway_status
+      state_topic: aguada/gateway/status
+      icon: mdi:router-wireless
+
+    - name: "Gateway OTA Evento"
+      unique_id: aguada_gateway_ota_evento
+      state_topic: aguada/gateway/ota
+      value_template: "{{ value_json.event | default('unknown') }}"
+      icon: mdi:update
+
+    - name: "Gateway OTA Erro"
+      unique_id: aguada_gateway_ota_erro
+      state_topic: aguada/gateway/ota
+      value_template: "{{ value_json.error if value_json.error is defined else 0 }}"
+      icon: mdi:alert-circle-outline
+
+    - name: "Gateway Firmware"
+      unique_id: aguada_gateway_firmware
+      state_topic: aguada/gateway/info
+      value_template: "{{ value_json.fw_version | default('unknown') }}"
+      icon: mdi:tag

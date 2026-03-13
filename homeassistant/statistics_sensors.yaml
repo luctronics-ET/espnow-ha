@@ -1,0 +1,248 @@
+# Aguada — Sensores Estatísticos (Statistics Platform)
+# Versão: 3.0
+#
+# Inclua em configuration.yaml ANTES dos template_sensors:
+#   sensor:
+#     - platform: statistics
+#       ... (listar cada um abaixo) ...
+#
+# Ou use include_dir_merge_list:
+#   sensor: !include_dir_merge_list sensors/
+#
+# Estes sensores alimentam template_sensors.yaml:
+#   - aguada_con_vol_min_24h / aguada_con_vol_max_24h  → consumo 24h
+#   - aguada_con_taxa_segundo  → detecção de vazamento (L/s)
+#   - aguada_con_pct_media_7d  → médias semanais
+#
+# Intervalo de envio dos nodes: ~30s → ~120 amostras/hora
+# Limites de sampling_size dimensionados para cobrir o max_age corretamente.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BLOCO 1: MIN/MAX 24H — Base para cálculo de consumo diário
+# ─────────────────────────────────────────────────────────────────────────────
+
+- platform: statistics
+  name: "CON Vol Min 24h"
+  unique_id: aguada_con_vol_min_24h
+  entity_id: sensor.aguada_con_volume
+  state_characteristic: value_min
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "CON Vol Max 24h"
+  unique_id: aguada_con_vol_max_24h
+  entity_id: sensor.aguada_con_volume
+  state_characteristic: value_max
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "CAV Vol Min 24h"
+  unique_id: aguada_cav_vol_min_24h
+  entity_id: sensor.aguada_cav_volume
+  state_characteristic: value_min
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "CAV Vol Max 24h"
+  unique_id: aguada_cav_vol_max_24h
+  entity_id: sensor.aguada_cav_volume
+  state_characteristic: value_max
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "CB31 Vol Min 24h"
+  unique_id: aguada_cb31_vol_min_24h
+  entity_id: sensor.aguada_cb31_volume
+  state_characteristic: value_min
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "CB31 Vol Max 24h"
+  unique_id: aguada_cb31_vol_max_24h
+  entity_id: sensor.aguada_cb31_volume
+  state_characteristic: value_max
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "CB32 Vol Min 24h"
+  unique_id: aguada_cb32_vol_min_24h
+  entity_id: sensor.aguada_cb32_volume
+  state_characteristic: value_min
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "CB32 Vol Max 24h"
+  unique_id: aguada_cb32_vol_max_24h
+  entity_id: sensor.aguada_cb32_volume
+  state_characteristic: value_max
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "CIE1 Vol Min 24h"
+  unique_id: aguada_cie1_vol_min_24h
+  entity_id: sensor.aguada_cie1_volume
+  state_characteristic: value_min
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "CIE1 Vol Max 24h"
+  unique_id: aguada_cie1_vol_max_24h
+  entity_id: sensor.aguada_cie1_volume
+  state_characteristic: value_max
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "CIE2 Vol Min 24h"
+  unique_id: aguada_cie2_vol_min_24h
+  entity_id: sensor.aguada_cie2_volume
+  state_characteristic: value_min
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "CIE2 Vol Max 24h"
+  unique_id: aguada_cie2_vol_max_24h
+  entity_id: sensor.aguada_cie2_volume
+  state_characteristic: value_max
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BLOCO 2: TAXA DE VARIAÇÃO (change_second) — Base para detecção de vazamento
+# Janela de 2 horas — exige queda sustentada para acionar alarme
+# Unidade: L/s (positivo = enchendo, negativo = esvaziando)
+# ─────────────────────────────────────────────────────────────────────────────
+
+- platform: statistics
+  name: "CON Taxa Segundo"
+  unique_id: aguada_con_taxa_segundo
+  entity_id: sensor.aguada_con_volume
+  state_characteristic: change_second
+  max_age:
+    hours: 2
+  sampling_size: 60
+
+- platform: statistics
+  name: "CAV Taxa Segundo"
+  unique_id: aguada_cav_taxa_segundo
+  entity_id: sensor.aguada_cav_volume
+  state_characteristic: change_second
+  max_age:
+    hours: 2
+  sampling_size: 60
+
+- platform: statistics
+  name: "CB31 Taxa Segundo"
+  unique_id: aguada_cb31_taxa_segundo
+  entity_id: sensor.aguada_cb31_volume
+  state_characteristic: change_second
+  max_age:
+    hours: 2
+  sampling_size: 60
+
+- platform: statistics
+  name: "CB32 Taxa Segundo"
+  unique_id: aguada_cb32_taxa_segundo
+  entity_id: sensor.aguada_cb32_volume
+  state_characteristic: change_second
+  max_age:
+    hours: 2
+  sampling_size: 60
+
+- platform: statistics
+  name: "CIE1 Taxa Segundo"
+  unique_id: aguada_cie1_taxa_segundo
+  entity_id: sensor.aguada_cie1_volume
+  state_characteristic: change_second
+  max_age:
+    hours: 2
+  sampling_size: 60
+
+- platform: statistics
+  name: "CIE2 Taxa Segundo"
+  unique_id: aguada_cie2_taxa_segundo
+  entity_id: sensor.aguada_cie2_volume
+  state_characteristic: change_second
+  max_age:
+    hours: 2
+  sampling_size: 60
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BLOCO 3: MÉDIAS 7 DIAS (%) — Tendência operacional semanal
+# ─────────────────────────────────────────────────────────────────────────────
+
+- platform: statistics
+  name: "CON Pct Média 7d"
+  unique_id: aguada_con_pct_media_7d
+  entity_id: sensor.aguada_con_pct
+  state_characteristic: mean
+  max_age:
+    days: 7
+  sampling_size: 2500
+
+- platform: statistics
+  name: "CAV Pct Média 7d"
+  unique_id: aguada_cav_pct_media_7d
+  entity_id: sensor.aguada_cav_pct
+  state_characteristic: mean
+  max_age:
+    days: 7
+  sampling_size: 2500
+
+- platform: statistics
+  name: "CB31 Pct Média 7d"
+  unique_id: aguada_cb31_pct_media_7d
+  entity_id: sensor.aguada_cb31_pct
+  state_characteristic: mean
+  max_age:
+    days: 7
+  sampling_size: 2500
+
+- platform: statistics
+  name: "CB32 Pct Média 7d"
+  unique_id: aguada_cb32_pct_media_7d
+  entity_id: sensor.aguada_cb32_pct
+  state_characteristic: mean
+  max_age:
+    days: 7
+  sampling_size: 2500
+
+- platform: statistics
+  name: "CIE1 Pct Média 7d"
+  unique_id: aguada_cie1_pct_media_7d
+  entity_id: sensor.aguada_cie1_pct
+  state_characteristic: mean
+  max_age:
+    days: 7
+  sampling_size: 2500
+
+- platform: statistics
+  name: "CIE2 Pct Média 7d"
+  unique_id: aguada_cie2_pct_media_7d
+  entity_id: sensor.aguada_cie2_pct
+  state_characteristic: mean
+  max_age:
+    days: 7
+  sampling_size: 2500

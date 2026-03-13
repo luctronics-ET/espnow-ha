@@ -70,24 +70,27 @@ def mqtt_topic_balance(node_id: str, sensor_id: int) -> str:
 
 def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: dict):
     """Publish HA MQTT Discovery config for all entities of a sensor."""
-    alias    = cfg.get("alias", f"{node_id}_{sensor_id}")
+    alias    = cfg.get("alias", f"{node_id}_{sensor_id}").lower()
     name_pfx = cfg.get("name", alias)
-    uid_pfx  = f"aguada_{node_id}_{sensor_id}".replace("0x", "").replace("X", "")
-    dev      = {"name": alias, "identifiers": [f"aguada_{node_id}"], "manufacturer": "Aguada"}
+    uid_pfx  = f"aguada_{alias}"
+    dev      = {"name": cfg.get("alias", alias), "identifiers": [f"aguada_{alias}"], "manufacturer": "Aguada"}
     state_tp = mqtt_topic_state(node_id, sensor_id)
+    avail_tp = mqtt_topic_status(node_id)
 
     entities = [
         {
             "name": f"{name_pfx} - Nível",
-            "uid":  f"{uid_pfx}_level",
+            "uid":  f"{uid_pfx}_nivel",
+            "oid":  f"aguada_{alias}_nivel",
             "vt":   "{{ value_json.level_cm }}",
             "uom":  "cm",
             "dc":   "distance",
             "icon": "mdi:water-level",
         },
         {
-            "name": f"{name_pfx} - %",
+            "name": f"{name_pfx} - Volume %",
             "uid":  f"{uid_pfx}_pct",
+            "oid":  f"aguada_{alias}_pct",
             "vt":   "{{ value_json.pct }}",
             "uom":  "%",
             "dc":   None,
@@ -96,14 +99,16 @@ def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: di
         {
             "name": f"{name_pfx} - Volume",
             "uid":  f"{uid_pfx}_volume",
+            "oid":  f"aguada_{alias}_volume",
             "vt":   "{{ value_json.volume_L }}",
             "uom":  "L",
-            "dc":   "volume_storage",
+            "dc":   None,
             "icon": "mdi:water",
         },
         {
             "name": f"{name_pfx} - Distância",
-            "uid":  f"{uid_pfx}_distance",
+            "uid":  f"{uid_pfx}_distancia",
+            "oid":  f"aguada_{alias}_distancia",
             "vt":   "{{ value_json.distance_cm }}",
             "uom":  "cm",
             "dc":   "distance",
@@ -112,6 +117,7 @@ def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: di
         {
             "name": f"{name_pfx} - RSSI",
             "uid":  f"{uid_pfx}_rssi",
+            "oid":  f"aguada_{alias}_rssi",
             "vt":   "{{ value_json.rssi }}",
             "uom":  "dBm",
             "dc":   "signal_strength",
@@ -121,13 +127,16 @@ def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: di
 
     for e in entities:
         payload = {
-            "name":             e["name"],
-            "state_topic":      state_tp,
-            "value_template":   e["vt"],
+            "name":                e["name"],
+            "unique_id":           e["uid"],
+            "default_entity_id":   f"sensor.{e['oid']}",
+            "state_topic":         state_tp,
+            "value_template":      e["vt"],
             "unit_of_measurement": e["uom"],
-            "unique_id":        e["uid"],
-            "device":           dev,
-            "availability_topic": mqtt_topic_status(node_id),
+            "device":              dev,
+            "availability_topic":       avail_tp,
+            "payload_available":        "online",
+            "payload_not_available":    "offline",
         }
         if e["dc"]:
             payload["device_class"] = e["dc"]
@@ -171,7 +180,12 @@ class Bridge:
         self.reservoirs = load_reservoir_config(args.config)
         log.info("Loaded %d reservoirs from %s", len(self.reservoirs), args.config)
 
-        self.client  = mqtt.Client(client_id="aguada-bridge", clean_session=False)
+        import socket as _socket, os as _os
+        _cid = f"aguada-bridge-{_socket.gethostname()}-{_os.getpid()}"
+        self.client  = mqtt.Client(client_id=_cid, clean_session=True,
+                                   protocol=mqtt.MQTTv311)
+        if args.mqtt_user:
+            self.client.username_pw_set(args.mqtt_user, args.mqtt_password)
         self.tracker = NodeTracker(self.client, args.offline_timeout)
         self._discovery_sent: set = set()
 
@@ -301,10 +315,12 @@ class Bridge:
         self.client.connect(self.args.mqtt, self.args.mqtt_port, keepalive=60)
         self.client.loop_start()
 
-        # Open serial
+        # Open serial (opening ACM resets the ESP32-C3; wait for boot)
         log.info("Opening %s @ %d baud", self.args.port, self.args.baud)
         ser = serial.Serial(self.args.port, self.args.baud, timeout=1)
         self._serial = ser
+        log.info("Waiting 3s for gateway boot...")
+        time.sleep(3)
 
         log.info("Bridge running. Ctrl+C to stop.")
         last_timeout_check = time.time()
@@ -344,6 +360,8 @@ def main():
     parser.add_argument("--mqtt",            default="localhost")
     parser.add_argument("--mqtt-port",       default=1883, type=int)
     parser.add_argument("--config",          default=str(Path(__file__).parent / "reservoirs.yaml"))
+    parser.add_argument("--mqtt-user",       default="")
+    parser.add_argument("--mqtt-password",   default="")
     parser.add_argument("--offline-timeout", default=300, type=int,
                         help="Seconds without data before node is marked offline")
     parser.add_argument("--debug",           action="store_true")

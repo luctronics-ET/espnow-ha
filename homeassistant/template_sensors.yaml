@@ -1,0 +1,346 @@
+# Aguada — Sensores Template (Agregados, Consumo, Detecção de Vazamento)
+# Versão: 3.0
+#
+# Inclua em configuration.yaml:
+#   template: !include homeassistant/template_sensors.yaml
+#
+# Depende de: statistics_sensors.yaml (para sensores de min/max/taxa)
+#
+# Fluxo hídrico do sistema:
+#   HID-PRAIA → CIE1/CIE2 (245m³ cada) → CB31/CB32 (40m³ cada)
+#                                       → CON (80m³) → Rede de Consumo
+#                                       → CAV (80m³) → Rede de Incêndio
+#
+# Capacidades:
+#   CON: 80.000L | CAV: 80.000L | CB31: 40.000L | CB32: 40.000L
+#   CIE1: 245.000L | CIE2: 245.000L | TOTAL: 730.000L
+
+- sensor:
+
+    # ── AGREGADOS GLOBAIS ──────────────────────────────────────────────────────
+
+    - name: "Aguada Volume Total"
+      unique_id: aguada_volume_total
+      unit_of_measurement: "m³"
+      state_class: measurement
+      icon: mdi:water-well
+      state: >
+        {% set con  = states('sensor.aguada_con_volume')  | float(0) %}
+        {% set cav  = states('sensor.aguada_cav_volume')  | float(0) %}
+        {% set cb31 = states('sensor.aguada_cb31_volume') | float(0) %}
+        {% set cb32 = states('sensor.aguada_cb32_volume') | float(0) %}
+        {% set cie1 = states('sensor.aguada_cie1_volume') | float(0) %}
+        {% set cie2 = states('sensor.aguada_cie2_volume') | float(0) %}
+        {{ ((con + cav + cb31 + cb32 + cie1 + cie2) / 1000) | round(1) }}
+
+    - name: "Aguada Volume Total %"
+      unique_id: aguada_volume_total_pct
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:water-percent
+      state: >
+        {% set con  = states('sensor.aguada_con_volume')  | float(0) %}
+        {% set cav  = states('sensor.aguada_cav_volume')  | float(0) %}
+        {% set cb31 = states('sensor.aguada_cb31_volume') | float(0) %}
+        {% set cb32 = states('sensor.aguada_cb32_volume') | float(0) %}
+        {% set cie1 = states('sensor.aguada_cie1_volume') | float(0) %}
+        {% set cie2 = states('sensor.aguada_cie2_volume') | float(0) %}
+        {{ ((con + cav + cb31 + cb32 + cie1 + cie2) / 730000 * 100) | round(1) }}
+
+    # CB03 = soma dos dois reservatórios da Casa de Bombas N3
+    - name: "CB03 Volume"
+      unique_id: aguada_cb03_volume
+      unit_of_measurement: "L"
+      state_class: measurement
+      icon: mdi:water
+      state: >
+        {% set cb31 = states('sensor.aguada_cb31_volume') | float(0) %}
+        {% set cb32 = states('sensor.aguada_cb32_volume') | float(0) %}
+        {{ (cb31 + cb32) | round(0) | int }}
+
+    - name: "CB03 Volume %"
+      unique_id: aguada_cb03_pct
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:water-percent
+      state: >
+        {% set cb31 = states('sensor.aguada_cb31_volume') | float(0) %}
+        {% set cb32 = states('sensor.aguada_cb32_volume') | float(0) %}
+        {{ ((cb31 + cb32) / 80000 * 100) | round(1) }}
+
+    - name: "Cisternas Volume Total"
+      unique_id: aguada_cisternas_volume
+      unit_of_measurement: "m³"
+      state_class: measurement
+      icon: mdi:water-pump
+      state: >
+        {% set cie1 = states('sensor.aguada_cie1_volume') | float(0) %}
+        {% set cie2 = states('sensor.aguada_cie2_volume') | float(0) %}
+        {{ ((cie1 + cie2) / 1000) | round(1) }}
+
+    - name: "Cisternas Volume %"
+      unique_id: aguada_cisternas_pct
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:water-percent
+      state: >
+        {% set cie1 = states('sensor.aguada_cie1_volume') | float(0) %}
+        {% set cie2 = states('sensor.aguada_cie2_volume') | float(0) %}
+        {{ ((cie1 + cie2) / 490000 * 100) | round(1) }}
+
+    # ── CONSUMO ESTIMADO 24H POR RESERVATÓRIO ─────────────────────────────────
+    # Cálculo: max_volume_24h - min_volume_24h
+    # Representa a variação total do dia (enchimento + esvaziamento)
+    # Para CON/CAV, aprox. o consumo líquido da rede quando não há recarga
+
+    - name: "CON Consumo 24h"
+      unique_id: aguada_con_consumo_24h
+      unit_of_measurement: "L"
+      state_class: measurement
+      icon: mdi:water-minus
+      state: >
+        {% set vmax = states('sensor.aguada_con_vol_max_24h') | float(0) %}
+        {% set vmin = states('sensor.aguada_con_vol_min_24h') | float(vmax) %}
+        {{ [vmax - vmin, 0] | max | round(0) | int }}
+
+    - name: "CAV Consumo 24h"
+      unique_id: aguada_cav_consumo_24h
+      unit_of_measurement: "L"
+      state_class: measurement
+      icon: mdi:water-minus
+      state: >
+        {% set vmax = states('sensor.aguada_cav_vol_max_24h') | float(0) %}
+        {% set vmin = states('sensor.aguada_cav_vol_min_24h') | float(vmax) %}
+        {{ [vmax - vmin, 0] | max | round(0) | int }}
+
+    - name: "CB31 Consumo 24h"
+      unique_id: aguada_cb31_consumo_24h
+      unit_of_measurement: "L"
+      state_class: measurement
+      icon: mdi:water-minus
+      state: >
+        {% set vmax = states('sensor.aguada_cb31_vol_max_24h') | float(0) %}
+        {% set vmin = states('sensor.aguada_cb31_vol_min_24h') | float(vmax) %}
+        {{ [vmax - vmin, 0] | max | round(0) | int }}
+
+    - name: "CB32 Consumo 24h"
+      unique_id: aguada_cb32_consumo_24h
+      unit_of_measurement: "L"
+      state_class: measurement
+      icon: mdi:water-minus
+      state: >
+        {% set vmax = states('sensor.aguada_cb32_vol_max_24h') | float(0) %}
+        {% set vmin = states('sensor.aguada_cb32_vol_min_24h') | float(vmax) %}
+        {{ [vmax - vmin, 0] | max | round(0) | int }}
+
+    - name: "CIE1 Consumo 24h"
+      unique_id: aguada_cie1_consumo_24h
+      unit_of_measurement: "L"
+      state_class: measurement
+      icon: mdi:water-minus
+      state: >
+        {% set vmax = states('sensor.aguada_cie1_vol_max_24h') | float(0) %}
+        {% set vmin = states('sensor.aguada_cie1_vol_min_24h') | float(vmax) %}
+        {{ [vmax - vmin, 0] | max | round(0) | int }}
+
+    - name: "CIE2 Consumo 24h"
+      unique_id: aguada_cie2_consumo_24h
+      unit_of_measurement: "L"
+      state_class: measurement
+      icon: mdi:water-minus
+      state: >
+        {% set vmax = states('sensor.aguada_cie2_vol_max_24h') | float(0) %}
+        {% set vmin = states('sensor.aguada_cie2_vol_min_24h') | float(vmax) %}
+        {{ [vmax - vmin, 0] | max | round(0) | int }}
+
+    - name: "Aguada Consumo Total 24h"
+      unique_id: aguada_consumo_total_24h
+      unit_of_measurement: "m³"
+      state_class: measurement
+      icon: mdi:water-minus
+      state: >
+        {% set con  = states('sensor.aguada_con_consumo_24h')  | float(0) %}
+        {% set cav  = states('sensor.aguada_cav_consumo_24h')  | float(0) %}
+        {% set cb31 = states('sensor.aguada_cb31_consumo_24h') | float(0) %}
+        {% set cb32 = states('sensor.aguada_cb32_consumo_24h') | float(0) %}
+        {% set cie1 = states('sensor.aguada_cie1_consumo_24h') | float(0) %}
+        {% set cie2 = states('sensor.aguada_cie2_consumo_24h') | float(0) %}
+        {{ ((con + cav + cb31 + cb32 + cie1 + cie2) / 1000) | round(2) }}
+
+    # ── TAXA DE VARIAÇÃO DO VOLUME (L/h) ──────────────────────────────────────
+    # Positivo = enchendo | Negativo = esvaziando
+    # Calculado a partir de statistics change_second (L/s) × 3600
+
+    - name: "CON Taxa Variação"
+      unique_id: aguada_con_taxa_variacao
+      unit_of_measurement: "L/h"
+      state_class: measurement
+      icon: mdi:trending-down
+      state: >
+        {% set r = states('sensor.aguada_con_taxa_segundo') | float(0) %}
+        {{ (r * 3600) | round(0) | int }}
+
+    - name: "CAV Taxa Variação"
+      unique_id: aguada_cav_taxa_variacao
+      unit_of_measurement: "L/h"
+      state_class: measurement
+      icon: mdi:trending-down
+      state: >
+        {% set r = states('sensor.aguada_cav_taxa_segundo') | float(0) %}
+        {{ (r * 3600) | round(0) | int }}
+
+    - name: "CB31 Taxa Variação"
+      unique_id: aguada_cb31_taxa_variacao
+      unit_of_measurement: "L/h"
+      state_class: measurement
+      icon: mdi:trending-down
+      state: >
+        {% set r = states('sensor.aguada_cb31_taxa_segundo') | float(0) %}
+        {{ (r * 3600) | round(0) | int }}
+
+    - name: "CB32 Taxa Variação"
+      unique_id: aguada_cb32_taxa_variacao
+      unit_of_measurement: "L/h"
+      state_class: measurement
+      icon: mdi:trending-down
+      state: >
+        {% set r = states('sensor.aguada_cb32_taxa_segundo') | float(0) %}
+        {{ (r * 3600) | round(0) | int }}
+
+    - name: "CIE1 Taxa Variação"
+      unique_id: aguada_cie1_taxa_variacao
+      unit_of_measurement: "L/h"
+      state_class: measurement
+      icon: mdi:trending-down
+      state: >
+        {% set r = states('sensor.aguada_cie1_taxa_segundo') | float(0) %}
+        {{ (r * 3600) | round(0) | int }}
+
+    - name: "CIE2 Taxa Variação"
+      unique_id: aguada_cie2_taxa_variacao
+      unit_of_measurement: "L/h"
+      state_class: measurement
+      icon: mdi:trending-down
+      state: >
+        {% set r = states('sensor.aguada_cie2_taxa_segundo') | float(0) %}
+        {{ (r * 3600) | round(0) | int }}
+
+    # ── MÉDIAS 7 DIAS (%) ─────────────────────────────────────────────────────
+    # Refletem o comportamento operacional médio de cada reservatório
+
+    - name: "CON Média 7d"
+      unique_id: aguada_con_media_7d
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:chart-line
+      state: "{{ states('sensor.aguada_con_pct_media_7d') | float(0) | round(1) }}"
+
+    - name: "CAV Média 7d"
+      unique_id: aguada_cav_media_7d
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:chart-line
+      state: "{{ states('sensor.aguada_cav_pct_media_7d') | float(0) | round(1) }}"
+
+    - name: "CB03 Média 7d"
+      unique_id: aguada_cb03_media_7d
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:chart-line
+      state: >
+        {% set m31 = states('sensor.aguada_cb31_pct_media_7d') | float(0) %}
+        {% set m32 = states('sensor.aguada_cb32_pct_media_7d') | float(0) %}
+        {{ ((m31 + m32) / 2) | round(1) }}
+
+    - name: "Cisternas Média 7d"
+      unique_id: aguada_cisternas_media_7d
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:chart-line
+      state: >
+        {% set m1 = states('sensor.aguada_cie1_pct_media_7d') | float(0) %}
+        {% set m2 = states('sensor.aguada_cie2_pct_media_7d') | float(0) %}
+        {{ ((m1 + m2) / 2) | round(1) }}
+
+# ── SENSORES BINÁRIOS — DETECÇÃO DE VAZAMENTO ─────────────────────────────────
+# Limiares baseados em 5% da capacidade por hora de perda contínua:
+#   CON/CAV  (80.000L): 5% = 4.000 L/h = 1.111 L/s → threshold: -1.111 L/s
+#   CB31/CB32(40.000L): 5% = 2.000 L/h = 0.556 L/s → threshold: -0.556 L/s
+#   CIE1/CIE2(245kL) : 5% = 12.250 L/h = 3.403 L/s → threshold: -3.403 L/s
+# Janela de detecção: 2 horas de média (statistics_sensors.yaml)
+
+- binary_sensor:
+
+    - name: "CON Vazamento"
+      unique_id: aguada_con_vazamento
+      icon: mdi:pipe-leak
+      device_class: moisture
+      state: >
+        {% set rate = states('sensor.aguada_con_taxa_segundo') | float(0) %}
+        {{ rate < -1.111 }}
+
+    - name: "CAV Vazamento"
+      unique_id: aguada_cav_vazamento
+      icon: mdi:pipe-leak
+      device_class: moisture
+      state: >
+        {% set rate = states('sensor.aguada_cav_taxa_segundo') | float(0) %}
+        {{ rate < -1.111 }}
+
+    - name: "CB31 Vazamento"
+      unique_id: aguada_cb31_vazamento
+      icon: mdi:pipe-leak
+      device_class: moisture
+      state: >
+        {% set rate = states('sensor.aguada_cb31_taxa_segundo') | float(0) %}
+        {{ rate < -0.556 }}
+
+    - name: "CB32 Vazamento"
+      unique_id: aguada_cb32_vazamento
+      icon: mdi:pipe-leak
+      device_class: moisture
+      state: >
+        {% set rate = states('sensor.aguada_cb32_taxa_segundo') | float(0) %}
+        {{ rate < -0.556 }}
+
+    - name: "CIE1 Vazamento"
+      unique_id: aguada_cie1_vazamento
+      icon: mdi:pipe-leak
+      device_class: moisture
+      state: >
+        {% set rate = states('sensor.aguada_cie1_taxa_segundo') | float(0) %}
+        {{ rate < -3.403 }}
+
+    - name: "CIE2 Vazamento"
+      unique_id: aguada_cie2_vazamento
+      icon: mdi:pipe-leak
+      device_class: moisture
+      state: >
+        {% set rate = states('sensor.aguada_cie2_taxa_segundo') | float(0) %}
+        {{ rate < -3.403 }}
+
+    # Alarme mestre — ativo se qualquer reservatório estiver em vazamento
+    - name: "Aguada Alarme Vazamento"
+      unique_id: aguada_alarme_vazamento
+      icon: mdi:alert
+      device_class: problem
+      state: >
+        {{ is_state('binary_sensor.aguada_con_vazamento',  'on')
+           or is_state('binary_sensor.aguada_cav_vazamento',  'on')
+           or is_state('binary_sensor.aguada_cb31_vazamento', 'on')
+           or is_state('binary_sensor.aguada_cb32_vazamento', 'on')
+           or is_state('binary_sensor.aguada_cie1_vazamento', 'on')
+           or is_state('binary_sensor.aguada_cie2_vazamento', 'on') }}
+
+    # Alarme de nível crítico master (< 10% em qualquer reservatório)
+    - name: "Aguada Alarme Nível Crítico"
+      unique_id: aguada_alarme_nivel_critico
+      icon: mdi:alert-circle
+      device_class: problem
+      state: >
+        {{ states('sensor.aguada_con_pct')  | float(100) < 10
+           or states('sensor.aguada_cav_pct')  | float(100) < 10
+           or states('sensor.aguada_cb31_pct') | float(100) < 10
+           or states('sensor.aguada_cb32_pct') | float(100) < 10
+           or states('sensor.aguada_cie1_pct') | float(100) < 10
+           or states('sensor.aguada_cie2_pct') | float(100) < 10 }}

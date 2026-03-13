@@ -1,0 +1,542 @@
+# Aguada — Automações de Alerta
+# Referenciar em configuration.yaml:
+#   automation: !include automations.yaml
+#
+# Thresholds:
+#   Baixo    = 20%
+#   Crítico  = 10%
+#   Offline  = gateway desconectado
+
+# ── CON — Castelo de Consumo ──────────────────────────────────────────────────
+- id: aguada_con_baixo
+  alias: "Aguada: CON nível baixo (< 20%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_con_pct
+      below: 20
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_con_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_con_baixo
+        title: "⚠️ CON — Nível Baixo"
+        message: >
+          Castelo de Consumo está em {{ states('sensor.aguada_con_pct') }}%
+          ({{ states('sensor.aguada_con_volume') }} L).
+
+- id: aguada_con_critico
+  alias: "Aguada: CON nível crítico (< 10%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_con_pct
+      below: 10
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_con_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_con_critico
+        title: "🚨 CON — Nível CRÍTICO"
+        message: >
+          Castelo de Consumo está em {{ states('sensor.aguada_con_pct') }}%
+          ({{ states('sensor.aguada_con_volume') }} L). Ação imediata necessária!
+
+# ── CAV — Castelo de Incêndio ─────────────────────────────────────────────────
+- id: aguada_cav_baixo
+  alias: "Aguada: CAV nível baixo (< 20%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_cav_pct
+      below: 20
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cav_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cav_baixo
+        title: "⚠️ CAV — Nível Baixo"
+        message: >
+          Castelo de Incêndio está em {{ states('sensor.aguada_cav_pct') }}%
+          ({{ states('sensor.aguada_cav_volume') }} L).
+
+- id: aguada_cav_critico
+  alias: "Aguada: CAV nível crítico (< 10%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_cav_pct
+      below: 10
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cav_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cav_critico
+        title: "🚨 CAV — Nível CRÍTICO"
+        message: >
+          Castelo de Incêndio está em {{ states('sensor.aguada_cav_pct') }}%
+          ({{ states('sensor.aguada_cav_volume') }} L). Ação imediata necessária!
+
+# ── CB31/CB32 — Casas de Bombas N3 ───────────────────────────────────────────
+- id: aguada_cb31_baixo
+  alias: "Aguada: CB31 nível baixo (< 20%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_cb31_pct
+      below: 20
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cb31_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cb31_baixo
+        title: "⚠️ CB31 — Nível Baixo"
+        message: >
+          Casa de Bombas N3.1 está em {{ states('sensor.aguada_cb31_pct') }}%
+          ({{ states('sensor.aguada_cb31_volume') }} L).
+
+- id: aguada_cb31_critico
+  alias: "Aguada: CB31 nível crítico (< 10%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_cb31_pct
+      below: 10
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cb31_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cb31_critico
+        title: "🚨 CB31 — Nível CRÍTICO"
+        message: >
+          Casa de Bombas N3.1 está em {{ states('sensor.aguada_cb31_pct') }}%
+          ({{ states('sensor.aguada_cb31_volume') }} L). Ação imediata necessária!
+
+- id: aguada_cb32_baixo
+  alias: "Aguada: CB32 nível baixo (< 20%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_cb32_pct
+      below: 20
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cb32_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cb32_baixo
+        title: "⚠️ CB32 — Nível Baixo"
+        message: >
+          Casa de Bombas N3.2 está em {{ states('sensor.aguada_cb32_pct') }}%
+          ({{ states('sensor.aguada_cb32_volume') }} L).
+
+- id: aguada_cb32_critico
+  alias: "Aguada: CB32 nível crítico (< 10%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_cb32_pct
+      below: 10
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cb32_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cb32_critico
+        title: "🚨 CB32 — Nível CRÍTICO"
+        message: >
+          Casa de Bombas N3.2 está em {{ states('sensor.aguada_cb32_pct') }}%
+          ({{ states('sensor.aguada_cb32_volume') }} L). Ação imediata necessária!
+
+# ── CIE1/CIE2 — Cisternas ────────────────────────────────────────────────────
+- id: aguada_cie1_baixo
+  alias: "Aguada: CIE1 nível baixo (< 20%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_cie1_pct
+      below: 20
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cie1_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cie1_baixo
+        title: "⚠️ CIE1 — Nível Baixo"
+        message: >
+          Cisterna CIE1 está em {{ states('sensor.aguada_cie1_pct') }}%
+          ({{ states('sensor.aguada_cie1_volume') }} L).
+
+- id: aguada_cie1_critico
+  alias: "Aguada: CIE1 nível crítico (< 10%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_cie1_pct
+      below: 10
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cie1_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cie1_critico
+        title: "🚨 CIE1 — Nível CRÍTICO"
+        message: >
+          Cisterna CIE1 está em {{ states('sensor.aguada_cie1_pct') }}%
+          ({{ states('sensor.aguada_cie1_volume') }} L). Ação imediata necessária!
+
+- id: aguada_cie2_baixo
+  alias: "Aguada: CIE2 nível baixo (< 20%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_cie2_pct
+      below: 20
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cie2_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cie2_baixo
+        title: "⚠️ CIE2 — Nível Baixo"
+        message: >
+          Cisterna CIE2 está em {{ states('sensor.aguada_cie2_pct') }}%
+          ({{ states('sensor.aguada_cie2_volume') }} L).
+
+- id: aguada_cie2_critico
+  alias: "Aguada: CIE2 nível crítico (< 10%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_cie2_pct
+      below: 10
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cie2_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cie2_critico
+        title: "🚨 CIE2 — Nível CRÍTICO"
+        message: >
+          Cisterna CIE2 está em {{ states('sensor.aguada_cie2_pct') }}%
+          ({{ states('sensor.aguada_cie2_volume') }} L). Ação imediata necessária!
+
+# ── Gateway offline ───────────────────────────────────────────────────────────
+- id: aguada_gateway_offline
+  alias: "Aguada: Gateway offline"
+  trigger:
+    - platform: state
+      entity_id: sensor.aguada_gateway_status
+      to: "offline"
+      for:
+        minutes: 5
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_gateway_offline
+        title: "🔴 Gateway Aguada offline"
+        message: >
+          O gateway ESP32 está sem comunicação há mais de 5 minutos.
+          Verifique a conectividade WiFi/MQTT.
+
+- id: aguada_gateway_online
+  alias: "Aguada: Gateway voltou online"
+  trigger:
+    - platform: state
+      entity_id: sensor.aguada_gateway_status
+      to: "online"
+  condition:
+    - condition: state
+      entity_id: persistent_notification.aguada_gateway_offline
+      state: "notifying"
+  action:
+    - service: persistent_notification.dismiss
+      data:
+        notification_id: aguada_gateway_offline
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_gateway_online
+        title: "✅ Gateway Aguada online"
+        message: "Gateway ESP32 reconectado com sucesso."
+
+# ── OTA do Gateway ───────────────────────────────────────────────────────────
+- id: aguada_gateway_ota_error
+  alias: "Aguada: Erro OTA no gateway"
+  trigger:
+    - platform: state
+      entity_id: sensor.aguada_gateway_ota_evento
+      to: "error"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_gateway_ota_error
+        title: "🚨 Gateway OTA com erro"
+        message: >
+          A atualização OTA do gateway falhou.
+          Código de erro: {{ states('sensor.aguada_gateway_ota_erro') }}.
+          Versão reportada: {{ states('sensor.aguada_gateway_firmware') }}.
+
+- id: aguada_gateway_ota_start
+  alias: "Aguada: OTA do gateway iniciado"
+  trigger:
+    - platform: state
+      entity_id: sensor.aguada_gateway_ota_evento
+      to: "start"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_gateway_ota_status
+        title: "⬆️ OTA do gateway iniciado"
+        message: >
+          O gateway iniciou atualização OTA.
+          Versão atual reportada: {{ states('sensor.aguada_gateway_firmware') }}.
+
+- id: aguada_gateway_ota_end
+  alias: "Aguada: OTA do gateway concluído"
+  trigger:
+    - platform: state
+      entity_id: sensor.aguada_gateway_ota_evento
+      to: "end"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_gateway_ota_status
+        title: "✅ OTA do gateway concluído"
+        message: >
+          O gateway concluiu a atualização OTA e deve reiniciar em seguida.
+
+# ── DETECÇÃO DE VAZAMENTO POR RESERVATÓRIO ────────────────────────────────────
+# Baseado nos binary_sensors em template_sensors.yaml
+# Limiar: 5% da capacidade por hora de perda contínua (janela de 2h)
+
+- id: aguada_con_vazamento_detectado
+  alias: "Aguada: CON — Vazamento detectado"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.aguada_con_vazamento
+      to: "on"
+      for:
+        minutes: 10
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_con_volume') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_con_vazamento
+        title: "🚰 CON — Possível Vazamento"
+        message: >
+          Castelo de Consumo perdendo volume acima do limiar (> 4.000 L/h) por
+          pelo menos 10 minutos. Volume atual: {{ states('sensor.aguada_con_volume') }} L
+          ({{ states('sensor.aguada_con_pct') }}%). Taxa: {{ states('sensor.aguada_con_taxa_variacao') }} L/h.
+          Verifique tubulações e conexões.
+
+- id: aguada_con_vazamento_resolvido
+  alias: "Aguada: CON — Vazamento resolvido"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.aguada_con_vazamento
+      to: "off"
+  action:
+    - service: persistent_notification.dismiss
+      data:
+        notification_id: aguada_con_vazamento
+
+- id: aguada_cav_vazamento_detectado
+  alias: "Aguada: CAV — Vazamento detectado"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.aguada_cav_vazamento
+      to: "on"
+      for:
+        minutes: 10
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cav_volume') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cav_vazamento
+        title: "🚰 CAV — Possível Vazamento"
+        message: >
+          Castelo de Incêndio perdendo volume acima do limiar (> 4.000 L/h) por
+          pelo menos 10 minutos. Volume atual: {{ states('sensor.aguada_cav_volume') }} L
+          ({{ states('sensor.aguada_cav_pct') }}%). Taxa: {{ states('sensor.aguada_cav_taxa_variacao') }} L/h.
+
+- id: aguada_cav_vazamento_resolvido
+  alias: "Aguada: CAV — Vazamento resolvido"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.aguada_cav_vazamento
+      to: "off"
+  action:
+    - service: persistent_notification.dismiss
+      data:
+        notification_id: aguada_cav_vazamento
+
+- id: aguada_cb31_vazamento_detectado
+  alias: "Aguada: CB31 — Vazamento detectado"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.aguada_cb31_vazamento
+      to: "on"
+      for:
+        minutes: 10
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cb31_volume') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cb31_vazamento
+        title: "🚰 CB31 — Possível Vazamento"
+        message: >
+          Casa de Bombas N3.1 perdendo volume acima do limiar (> 2.000 L/h) por
+          pelo menos 10 minutos. Volume atual: {{ states('sensor.aguada_cb31_volume') }} L
+          ({{ states('sensor.aguada_cb31_pct') }}%). Taxa: {{ states('sensor.aguada_cb31_taxa_variacao') }} L/h.
+
+- id: aguada_cb31_vazamento_resolvido
+  alias: "Aguada: CB31 — Vazamento resolvido"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.aguada_cb31_vazamento
+      to: "off"
+  action:
+    - service: persistent_notification.dismiss
+      data:
+        notification_id: aguada_cb31_vazamento
+
+- id: aguada_cb32_vazamento_detectado
+  alias: "Aguada: CB32 — Vazamento detectado"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.aguada_cb32_vazamento
+      to: "on"
+      for:
+        minutes: 10
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cb32_volume') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cb32_vazamento
+        title: "🚰 CB32 — Possível Vazamento"
+        message: >
+          Casa de Bombas N3.2 perdendo volume acima do limiar (> 2.000 L/h) por
+          pelo menos 10 minutos. Volume atual: {{ states('sensor.aguada_cb32_volume') }} L
+          ({{ states('sensor.aguada_cb32_pct') }}%). Taxa: {{ states('sensor.aguada_cb32_taxa_variacao') }} L/h.
+
+- id: aguada_cb32_vazamento_resolvido
+  alias: "Aguada: CB32 — Vazamento resolvido"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.aguada_cb32_vazamento
+      to: "off"
+  action:
+    - service: persistent_notification.dismiss
+      data:
+        notification_id: aguada_cb32_vazamento
+
+- id: aguada_cie1_vazamento_detectado
+  alias: "Aguada: CIE1 — Vazamento detectado"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.aguada_cie1_vazamento
+      to: "on"
+      for:
+        minutes: 10
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cie1_volume') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cie1_vazamento
+        title: "🚰 CIE1 — Possível Vazamento"
+        message: >
+          Cisterna CIE1 perdendo volume acima do limiar (> 12.250 L/h) por
+          pelo menos 10 minutos. Volume atual: {{ states('sensor.aguada_cie1_volume') }} L
+          ({{ states('sensor.aguada_cie1_pct') }}%). Taxa: {{ states('sensor.aguada_cie1_taxa_variacao') }} L/h.
+
+- id: aguada_cie1_vazamento_resolvido
+  alias: "Aguada: CIE1 — Vazamento resolvido"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.aguada_cie1_vazamento
+      to: "off"
+  action:
+    - service: persistent_notification.dismiss
+      data:
+        notification_id: aguada_cie1_vazamento
+
+- id: aguada_cie2_vazamento_detectado
+  alias: "Aguada: CIE2 — Vazamento detectado"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.aguada_cie2_vazamento
+      to: "on"
+      for:
+        minutes: 10
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cie2_volume') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cie2_vazamento
+        title: "🚰 CIE2 — Possível Vazamento"
+        message: >
+          Cisterna CIE2 perdendo volume acima do limiar (> 12.250 L/h) por
+          pelo menos 10 minutos. Volume atual: {{ states('sensor.aguada_cie2_volume') }} L
+          ({{ states('sensor.aguada_cie2_pct') }}%). Taxa: {{ states('sensor.aguada_cie2_taxa_variacao') }} L/h.
+
+- id: aguada_cie2_vazamento_resolvido
+  alias: "Aguada: CIE2 — Vazamento resolvido"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.aguada_cie2_vazamento
+      to: "off"
+  action:
+    - service: persistent_notification.dismiss
+      data:
+        notification_id: aguada_cie2_vazamento
+
+# ── RELATÓRIO DIÁRIO às 07:00 ──────────────────────────────────────────────────
+- id: aguada_relatorio_diario
+  alias: "Aguada: Relatório diário — 07:00"
+  trigger:
+    - platform: time
+      at: "07:00:00"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_relatorio_diario
+        title: "📊 Relatório Diário — Aguada"
+        message: >
+          **Situação às {{ now().strftime('%d/%m/%Y %H:%M') }}**
+
+          🏰 Castelos:
+          • CON: {{ states('sensor.aguada_con_pct') }}% — {{ (states('sensor.aguada_con_volume') | float(0) / 1000) | round(1) }} m³ | Var 24h: {{ states('sensor.aguada_con_consumo_24h') }} L
+          • CAV: {{ states('sensor.aguada_cav_pct') }}% — {{ (states('sensor.aguada_cav_volume') | float(0) / 1000) | round(1) }} m³ | Var 24h: {{ states('sensor.aguada_cav_consumo_24h') }} L
+
+          ⚙️ Casa de Bombas N3:
+          • CB31: {{ states('sensor.aguada_cb31_pct') }}% — CB32: {{ states('sensor.aguada_cb32_pct') }}%
+          • CB03 Total: {{ states('sensor.aguada_cb03_pct') }}%
+
+          💧 Cisternas:
+          • CIE1: {{ states('sensor.aguada_cie1_pct') }}% — {{ (states('sensor.aguada_cie1_volume') | float(0) / 1000) | round(1) }} m³
+          • CIE2: {{ states('sensor.aguada_cie2_pct') }}% — {{ (states('sensor.aguada_cie2_volume') | float(0) / 1000) | round(1) }} m³
+          • Cisternas Total: {{ states('sensor.aguada_cisternas_pct') }}%
+
+          🌊 Sistema:
+          • Volume total armazenado: {{ states('sensor.aguada_volume_total') }} m³ ({{ states('sensor.aguada_volume_total_pct') }}%)
+          • Variação total 24h: {{ states('sensor.aguada_consumo_total_24h') }} m³
+          • Vazamentos ativos: {% if is_state('binary_sensor.aguada_alarme_vazamento', 'on') %}⚠️ SIM{% else %}✅ Nenhum{% endif %}
+

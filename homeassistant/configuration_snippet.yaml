@@ -1,0 +1,56 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Aguada V3 — Trecho para configuration.yaml do Home Assistant
+# Versão: 3.0
+#
+# Cole ou inclua o trecho abaixo em seu configuration.yaml.
+# Todos os arquivos .yaml referenciados devem ficar em /config
+# (mesma pasta do configuration.yaml).
+#
+# Estrutura de arquivos (recomendada):
+#   /config/
+#     configuration.yaml
+#     automations.yaml
+#     dashboard.yaml
+#     aguada/
+#       mqtt_sensors.yaml        ← sensores MQTT (state_class adicionado)
+#       template_sensors.yaml    ← agregados, consumo 24h, binários de vazamento
+#       statistics_sensors.yaml  ← plataforma statistics (min/max/taxa/média)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Pacote Aguada (inclui mqtt sensors) ───────────────────────────────────────
+homeassistant:
+  packages:
+    aguada: !include aguada/mqtt_sensors.yaml
+
+# ── Sensores estatísticos (statistics platform) ───────────────────────────────
+# Alimentam template_sensors.yaml com min/max/taxa/média
+sensor: !include aguada/statistics_sensors.yaml
+
+# ── Template sensors (agregados, consumo 24h, detecção de vazamento) ─────────
+template: !include aguada/template_sensors.yaml
+
+# ── Automações (alertas de nível + vazamentos + relatório diário) ─────────────
+automation: !include automations.yaml
+
+# ── Recorder — garantir histórico longo para statistic-graph ──────────────────
+recorder:
+  purge_keep_days: 30
+  include:
+    entity_globs:
+      - sensor.aguada_*
+      - binary_sensor.aguada_*
+
+# ── Lovelace (modo storage, importar dashboard.yaml via UI) ───────────────────
+# No HA: Configurações → Dashboards → "+ Adicionar dashboard"
+# Tipo: YAML, cole o conteúdo de dashboard.yaml
+# Ou use: lovelace: !include dashboard.yaml
+#          (requer modo YAML global no configuration.yaml)
+
+# ── Troubleshooting rápido ─────────────────────────────────────────────────────
+# Erro comum: usar extensão incorreta no include
+#   ERRADO: mqtt: !include mqtt_sensors.yam
+#   CERTO : mqtt: !include mqtt_sensors.yaml
+#
+# Erro comum: caminho inválido
+#   ERRADO: !include homeassistant/mqtt_sensors.yaml
+#   CERTO : !include aguada/mqtt_sensors.yaml

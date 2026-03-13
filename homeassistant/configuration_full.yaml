@@ -1,0 +1,67 @@
+# ============================================================================
+# AGUADA V3 — configuration.yaml COMPLETO (Home Assistant)
+# Copie e cole este conteúdo em /config/configuration.yaml
+# ============================================================================
+
+homeassistant:
+  name: Aguada V3
+  unit_system: metric
+  temperature_unit: C
+  country: BR
+  currency: BRL
+  # Ajuste se necessário
+  time_zone: America/Sao_Paulo
+
+# Recursos padrão do Home Assistant (UI, histórico, mobile app, etc.)
+default_config:
+
+# Logs básicos (opcional)
+logger:
+  default: warning
+
+# MQTT + Discovery de sensores Aguada
+# Arquivos incluídos devem estar em /config (mesma pasta do configuration.yaml)
+mqtt: !include mqtt_sensors.yaml
+
+# Statistics sensors (min/max/taxa/médias)
+sensor: !include statistics_sensors.yaml
+
+# Template sensors e binary_sensors (agregados, vazamento, alarmes)
+template: !include template_sensors.yaml
+
+# Automações Aguada
+automation: !include automations.yaml
+
+# Histórico para gráficos/statistics
+recorder:
+  purge_keep_days: 30
+  include:
+    entity_globs:
+      - sensor.aguada_*
+      - binary_sensor.aguada_*
+
+# ---------------------------------------------------------------------------
+# DASHBOARD (escolha UMA opção)
+# ---------------------------------------------------------------------------
+
+# OPÇÃO A — Recomendado (UI/Storage)
+#   Não habilite lovelace abaixo.
+#   Vá em Configurações > Dashboards > Adicionar dashboard (YAML)
+#   e use o arquivo: dashboard.yaml
+
+# OPÇÃO B — YAML global
+# lovelace:
+#   mode: yaml
+#   dashboards:
+#     aguada-v3:
+#       mode: yaml
+#       title: Aguada V3
+#       icon: mdi:water
+#       show_in_sidebar: true
+#       filename: dashboard.yaml
+
+# ---------------------------------------------------------------------------
+# Troubleshooting
+# ---------------------------------------------------------------------------
+# ERRADO: mqtt: !include mqtt_sensors.yam
+# CERTO : mqtt: !include mqtt_sensors.yaml
