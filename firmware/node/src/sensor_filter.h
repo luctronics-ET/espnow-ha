@@ -9,8 +9,9 @@ typedef struct {
     uint8_t  window;
     uint8_t  outlier_cm;
     uint16_t moving_avg;
-    bool     initialized;
-} sensor_filter_t;
+    bool     initialized;    // Auto-reset para mudanças reais grandes
+    uint8_t  consecutive_rejects;
+    uint16_t reject_value;} sensor_filter_t;
 
 void     filter_init(sensor_filter_t *f, uint8_t window, uint8_t outlier_cm);
 uint16_t filter_update(sensor_filter_t *f, uint16_t raw);

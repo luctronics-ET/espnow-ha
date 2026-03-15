@@ -26,6 +26,19 @@ void ultrasonic_init(uint8_t trig_pin, uint8_t echo_pin) {
 }
 
 uint16_t ultrasonic_read_cm(uint8_t trig_pin, uint8_t echo_pin) {
+    // HC-SR04 stability delay - critical for reliable readings
+    esp_rom_delay_us(100000);  // 100ms stabilization time
+    
+    // Ensure echo pin is LOW before starting (clear any residual state)
+    int64_t t_clear = esp_timer_get_time();
+    while (gpio_get_level((gpio_num_t)echo_pin)) {
+        if (esp_timer_get_time() - t_clear > 50000) {  // 50ms max wait
+            ESP_LOGD(TAG, "echo stuck HIGH, aborting");
+            return 0;
+        }
+        esp_rom_delay_us(1000);  // 1ms delay
+    }
+    
     // Send 10µs trigger pulse
     gpio_set_level((gpio_num_t)trig_pin, 0);
     esp_rom_delay_us(2);

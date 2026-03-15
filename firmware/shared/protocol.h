@@ -5,7 +5,7 @@
 // Protocol version
 #define PROTO_VERSION       0x03
 #define ESPNOW_CHANNEL      1
-#define FW_VERSION          "3.2.0"
+#define FW_VERSION          "4.0.0"
 
 // Defaults (used by both node and gateway)
 #define DEFAULT_MEASURE_S       30

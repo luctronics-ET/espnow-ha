@@ -5,8 +5,6 @@
 #
 # Este arquivo mantém apenas sensores de status/evento do gateway.
 
-discovery: true
-
 sensor:
   - name: "Gateway Status"
     unique_id: aguada_gateway_status

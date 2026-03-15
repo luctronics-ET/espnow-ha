@@ -79,6 +79,7 @@ static void output_heartbeat(const espnow_packet_t *pkt) {
     doc["type"]      = "HEARTBEAT";
     doc["node_id"]   = nid;
     doc["sensor_id"] = pkt->sensor_id;
+    doc["distance_cm"] = (int)pkt->distance_cm;  // Última distância válida
     doc["rssi"]      = pkt->rssi;
     doc["seq"]       = pkt->seq;
     doc["ts"]        = unix_now();

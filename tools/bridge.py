@@ -184,6 +184,7 @@ class Bridge:
         _cid = f"aguada-bridge-{_socket.gethostname()}-{_os.getpid()}"
         self.client  = mqtt.Client(client_id=_cid, clean_session=True,
                                    protocol=mqtt.MQTTv311)
+        self.client.will_set("aguada/gateway/status", "offline", retain=True)
         if args.mqtt_user:
             self.client.username_pw_set(args.mqtt_user, args.mqtt_password)
         self.tracker = NodeTracker(self.client, args.offline_timeout)
@@ -202,7 +203,14 @@ class Bridge:
     def _on_mqtt_connect(self, client, userdata, flags, rc):
         if rc == 0:
             log.info("MQTT connected")
+            client.publish("aguada/gateway/status", "online", retain=True)
             client.subscribe("aguada/cmd/#")
+
+            # Re-publish HA Discovery on every (re)connect to survive broker
+            # restarts/retained cleanup without requiring node reboot (HELLO).
+            for (node_id, sensor_id), cfg in self.reservoirs.items():
+                publish_discovery(client, node_id, sensor_id, cfg)
+                self._discovery_sent.add((node_id, sensor_id))
         else:
             log.error("MQTT connect failed rc=%d", rc)
 
@@ -270,8 +278,33 @@ class Bridge:
 
     def _handle_heartbeat(self, msg: dict):
         node_id = msg["node_id"].upper()
+        sensor_id = int(msg.get("sensor_id", 0))
         self.tracker.seen(node_id)
-        log.debug("HEARTBEAT %s seq=%s", node_id, msg.get("seq"))
+        log.debug("HEARTBEAT %s/%d seq=%s dist=%s", node_id, sensor_id, 
+                  msg.get("seq"), msg.get("distance_cm"))
+        
+        # Se heartbeat inclui distância, atualizar estado (mantém HA atualizado)
+        if "distance_cm" in msg and sensor_id > 0:
+            distance_cm = msg["distance_cm"]
+            if distance_cm > 0:  # Se distância válida
+                key = (node_id, sensor_id)
+                cfg = self.reservoirs.get(key)
+                if cfg:
+                    calcs = calculate(distance_cm, cfg)
+                    payload = {
+                        "alias":       cfg.get("alias", ""),
+                        "distance_cm": distance_cm,
+                        "level_cm":    calcs["level_cm"],
+                        "pct":         calcs["pct"],
+                        "volume_L":    calcs["volume_L"],
+                        "rssi":        msg.get("rssi", 0),
+                        "vbat":        None,
+                        "seq":         msg.get("seq", 0),
+                        "ts":          msg.get("ts", int(time.time())),
+                    }
+                    self.client.publish(mqtt_topic_state(node_id, sensor_id), 
+                                       json.dumps(payload), retain=True)
+                    log.debug("HEARTBEAT update: %s dist=%dcm", cfg.get("alias"), distance_cm)
 
     def _handle_hello(self, msg: dict):
         node_id = msg["node_id"].upper()

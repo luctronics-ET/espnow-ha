@@ -9,15 +9,23 @@ static const char *TAG = "nvs_cfg";
 void nvs_config_defaults(node_config_t *cfg, uint16_t node_id) {
     memset(cfg, 0, sizeof(*cfg));
     cfg->node_id              = node_id;
-    cfg->num_sensors          = 1;
+    
+    // Special cases: CIE (0x9EAC) and CB3 (0x2EC4) have 2 sensors
+    if (node_id == 0x9EAC || node_id == 0x2EC4) {
+        cfg->num_sensors = 2;
+        cfg->sensor[1].trig_pin   = DEFAULT_TRIG2;
+        cfg->sensor[1].echo_pin   = DEFAULT_ECHO2;
+        cfg->sensor[1].enabled    = true;
+    } else {
+        cfg->num_sensors = 1;
+        cfg->sensor[1].trig_pin   = DEFAULT_TRIG2;
+        cfg->sensor[1].echo_pin   = DEFAULT_ECHO2;
+        cfg->sensor[1].enabled    = false;
+    }
 
     cfg->sensor[0].trig_pin   = DEFAULT_TRIG1;
     cfg->sensor[0].echo_pin   = DEFAULT_ECHO1;
     cfg->sensor[0].enabled    = true;
-
-    cfg->sensor[1].trig_pin   = DEFAULT_TRIG2;
-    cfg->sensor[1].echo_pin   = DEFAULT_ECHO2;
-    cfg->sensor[1].enabled    = false;
 
     cfg->interval_measure_s   = DEFAULT_MEASURE_S;
     cfg->interval_send_s      = DEFAULT_SEND_S;

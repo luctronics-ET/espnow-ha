@@ -13,11 +13,13 @@ void mesh_init(void) {
 void mesh_update_neighbor(uint16_t node_id, const uint8_t *mac, int8_t rssi, uint8_t hops_to_gw) {
     // Look for existing entry or empty slot
     int empty_slot = -1;
+    uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    
     for (int i = 0; i < MESH_MAX_NEIGHBORS; i++) {
         if (s_neighbors[i].node_id == node_id) {
             s_neighbors[i].rssi       = rssi;
             s_neighbors[i].hops_to_gw = hops_to_gw;
-            s_neighbors[i].last_seen  = (uint32_t)(esp_timer_get_time() / 1000);
+            s_neighbors[i].last_seen  = now_ms;  // milliseconds
             if (mac) memcpy(s_neighbors[i].mac, mac, 6);
             return;
         }
@@ -28,19 +30,22 @@ void mesh_update_neighbor(uint16_t node_id, const uint8_t *mac, int8_t rssi, uin
         s_neighbors[empty_slot].node_id    = node_id;
         s_neighbors[empty_slot].rssi       = rssi;
         s_neighbors[empty_slot].hops_to_gw = hops_to_gw;
-        s_neighbors[empty_slot].last_seen  = (uint32_t)(esp_timer_get_time() / 1000);
+        s_neighbors[empty_slot].last_seen  = now_ms;  // milliseconds
         if (mac) memcpy(s_neighbors[empty_slot].mac, mac, 6);
         ESP_LOGI(TAG, "New neighbor: 0x%04X hops=%d rssi=%d", node_id, hops_to_gw, rssi);
     }
 }
 
 void mesh_expire_neighbors(uint32_t timeout_s) {
-    uint32_t now_s = (uint32_t)(esp_timer_get_time() / 1000000);
+    uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    uint32_t timeout_ms = timeout_s * 1000;
+    
     for (int i = 0; i < MESH_MAX_NEIGHBORS; i++) {
         if (s_neighbors[i].node_id != 0) {
-            uint32_t last_s = s_neighbors[i].last_seen / 1000;
-            if (now_s - last_s > timeout_s) {
-                ESP_LOGI(TAG, "Expired neighbor: 0x%04X", s_neighbors[i].node_id);
+            uint32_t elapsed = now_ms - s_neighbors[i].last_seen;  // overflow-safe
+            if (elapsed > timeout_ms) {
+                ESP_LOGI(TAG, "Expired neighbor: 0x%04X (idle %u ms)", 
+                         s_neighbors[i].node_id, elapsed);
                 memset(&s_neighbors[i], 0, sizeof(neighbor_t));
             }
         }
