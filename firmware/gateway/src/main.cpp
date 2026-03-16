@@ -13,6 +13,7 @@
 #include <ArduinoJson.h>
 #include <string.h>
 
+#include <freertos/queue.h>
 #include "espnow_gw.h"
 #include "../../shared/protocol.h"
 
@@ -25,6 +26,11 @@ static int64_t s_time_offset_s = 0;
 static uint32_t unix_now(void) {
     return (uint32_t)(s_time_offset_s + esp_timer_get_time() / 1000000LL);
 }
+
+// ── Packet queue (ESP-NOW cb → loop) ─────────────────────────────────────────
+#define PKT_QUEUE_LEN 16
+typedef struct { espnow_packet_t pkt; uint8_t src_mac[6]; } pkt_event_t;
+static QueueHandle_t s_pkt_queue = nullptr;
 
 // ── Node MAC cache ────────────────────────────────────────────────────────────
 #define NODE_CACHE_MAX 20
@@ -54,6 +60,7 @@ static const uint8_t *find_mac(uint16_t node_id) {
 static void json_out(JsonDocument &doc) {
     serializeJson(doc, Serial);
     Serial.println();
+    Serial.flush();
 }
 
 static void output_sensor(const espnow_packet_t *pkt) {
@@ -101,17 +108,12 @@ static void output_hello(const espnow_packet_t *pkt) {
 
 // ── ESP-NOW receive ───────────────────────────────────────────────────────────
 
+// Called from WiFi/ESP-NOW task — only enqueue, no Serial I/O.
 static void on_recv(const espnow_packet_t *pkt, const uint8_t *src_mac) {
-    cache_mac(pkt->node_id, src_mac);
-
-    switch (pkt->type) {
-        case PKT_SENSOR:    output_sensor(pkt);    break;
-        case PKT_HEARTBEAT: output_heartbeat(pkt); break;
-        case PKT_HELLO:     output_hello(pkt);     break;
-        default:
-            ESP_LOGW(TAG, "Unhandled type=0x%02X from 0x%04X", pkt->type, pkt->node_id);
-            break;
-    }
+    pkt_event_t evt;
+    evt.pkt = *pkt;
+    memcpy(evt.src_mac, src_mac, 6);
+    xQueueSend(s_pkt_queue, &evt, 0);  // non-blocking; drop if full
 }
 
 // ── Command → ESP-NOW ─────────────────────────────────────────────────────────
@@ -198,6 +200,7 @@ void setup(void) {
     Serial.begin(115200);
     delay(300);
 
+    s_pkt_queue = xQueueCreate(PKT_QUEUE_LEN, sizeof(pkt_event_t));
     gw_espnow_init(ESPNOW_CHANNEL, on_recv);
 
     uint8_t mac[6];
@@ -216,6 +219,20 @@ void setup(void) {
 }
 
 void loop(void) {
+    // Drain packet queue (filled by ESP-NOW WiFi-task callback).
+    pkt_event_t evt;
+    while (xQueueReceive(s_pkt_queue, &evt, 0) == pdTRUE) {
+        cache_mac(evt.pkt.node_id, evt.src_mac);
+        switch (evt.pkt.type) {
+            case PKT_SENSOR:    output_sensor(&evt.pkt);    break;
+            case PKT_HEARTBEAT: output_heartbeat(&evt.pkt); break;
+            case PKT_HELLO:     output_hello(&evt.pkt);     break;
+            default:
+                ESP_LOGW(TAG, "Unhandled type=0x%02X from 0x%04X",
+                         evt.pkt.type, evt.pkt.node_id);
+                break;
+        }
+    }
     serial_tick();
     delay(5);
 }

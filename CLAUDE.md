@@ -140,7 +140,8 @@ MQTT topics:
 | 0x9EAC | CIE1/CIE2 | Cisterna IE | 2 |
 | 0x3456 | CBIF1/CBIF2 | Casa de Bombas IF | 2 |
 
-Gateway MAC: `24:D7:EB:5B:2E:74`
+Gateway MAC (ESP32-S3, USB serial): `9C:13:9E:AC:E1:88`
+Gateway MAC (ESP32 DevKit ETH/ECN): `24:D7:EB:5B:2E:74`
 
 ---
 

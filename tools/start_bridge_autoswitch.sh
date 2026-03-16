@@ -4,7 +4,7 @@ set -u
 VENV_PY="/home/luc/Dev/espnow-ha/.venv/bin/python"
 BRIDGE="/home/luc/Dev/espnow-ha/tools/bridge.py"
 BROKER="/home/luc/Dev/espnow-ha/tools/mqtt_broker.py"
-GATEWAY_SERIAL="80:F1:B2:50:31:34"
+GATEWAY_SERIAL="9C:13:9E:AC:E1:88"
 SERIAL_PORT=""
 REMOTE_HOST="192.168.0.177"
 REMOTE_PORT="1883"

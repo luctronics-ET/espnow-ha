@@ -8,7 +8,7 @@
 			"type": "http",
 			"url": "http://homeassistant.local:8123/mcp_server/sse",
 			"headers": {
-				"Authorization": "Bearer ${input:HA_TOKEN}"
+				"Authorization": "HA_TOKEN",
 			}
 		},
 		"homeassistant/local-api": {
