@@ -22,7 +22,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 - platform: statistics
-  name: "CON Vol Min 24h"
+  name: "Aguada CON Vol Min 24h"
   unique_id: aguada_con_vol_min_24h
   entity_id: sensor.aguada_con_volume
   state_characteristic: value_min
@@ -31,7 +31,7 @@
   sampling_size: 300
 
 - platform: statistics
-  name: "CON Vol Max 24h"
+  name: "Aguada CON Vol Max 24h"
   unique_id: aguada_con_vol_max_24h
   entity_id: sensor.aguada_con_volume
   state_characteristic: value_max
@@ -40,7 +40,7 @@
   sampling_size: 300
 
 - platform: statistics
-  name: "CAV Vol Min 24h"
+  name: "Aguada CAV Vol Min 24h"
   unique_id: aguada_cav_vol_min_24h
   entity_id: sensor.aguada_cav_volume
   state_characteristic: value_min
@@ -49,7 +49,7 @@
   sampling_size: 300
 
 - platform: statistics
-  name: "CAV Vol Max 24h"
+  name: "Aguada CAV Vol Max 24h"
   unique_id: aguada_cav_vol_max_24h
   entity_id: sensor.aguada_cav_volume
   state_characteristic: value_max
@@ -58,7 +58,7 @@
   sampling_size: 300
 
 - platform: statistics
-  name: "CB31 Vol Min 24h"
+  name: "Aguada CB31 Vol Min 24h"
   unique_id: aguada_cb31_vol_min_24h
   entity_id: sensor.aguada_cb31_volume
   state_characteristic: value_min
@@ -67,7 +67,7 @@
   sampling_size: 300
 
 - platform: statistics
-  name: "CB31 Vol Max 24h"
+  name: "Aguada CB31 Vol Max 24h"
   unique_id: aguada_cb31_vol_max_24h
   entity_id: sensor.aguada_cb31_volume
   state_characteristic: value_max
@@ -76,7 +76,7 @@
   sampling_size: 300
 
 - platform: statistics
-  name: "CB32 Vol Min 24h"
+  name: "Aguada CB32 Vol Min 24h"
   unique_id: aguada_cb32_vol_min_24h
   entity_id: sensor.aguada_cb32_volume
   state_characteristic: value_min
@@ -85,7 +85,7 @@
   sampling_size: 300
 
 - platform: statistics
-  name: "CB32 Vol Max 24h"
+  name: "Aguada CB32 Vol Max 24h"
   unique_id: aguada_cb32_vol_max_24h
   entity_id: sensor.aguada_cb32_volume
   state_characteristic: value_max
@@ -94,7 +94,7 @@
   sampling_size: 300
 
 - platform: statistics
-  name: "CIE1 Vol Min 24h"
+  name: "Aguada CIE1 Vol Min 24h"
   unique_id: aguada_cie1_vol_min_24h
   entity_id: sensor.aguada_cie1_volume
   state_characteristic: value_min
@@ -103,7 +103,7 @@
   sampling_size: 300
 
 - platform: statistics
-  name: "CIE1 Vol Max 24h"
+  name: "Aguada CIE1 Vol Max 24h"
   unique_id: aguada_cie1_vol_max_24h
   entity_id: sensor.aguada_cie1_volume
   state_characteristic: value_max
@@ -112,7 +112,7 @@
   sampling_size: 300
 
 - platform: statistics
-  name: "CIE2 Vol Min 24h"
+  name: "Aguada CIE2 Vol Min 24h"
   unique_id: aguada_cie2_vol_min_24h
   entity_id: sensor.aguada_cie2_volume
   state_characteristic: value_min
@@ -121,7 +121,7 @@
   sampling_size: 300
 
 - platform: statistics
-  name: "CIE2 Vol Max 24h"
+  name: "Aguada CIE2 Vol Max 24h"
   unique_id: aguada_cie2_vol_max_24h
   entity_id: sensor.aguada_cie2_volume
   state_characteristic: value_max
@@ -136,7 +136,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 - platform: statistics
-  name: "CON Taxa Segundo"
+  name: "Aguada CON Taxa Segundo"
   unique_id: aguada_con_taxa_segundo
   entity_id: sensor.aguada_con_volume
   state_characteristic: change_second
@@ -145,7 +145,7 @@
   sampling_size: 60
 
 - platform: statistics
-  name: "CAV Taxa Segundo"
+  name: "Aguada CAV Taxa Segundo"
   unique_id: aguada_cav_taxa_segundo
   entity_id: sensor.aguada_cav_volume
   state_characteristic: change_second
@@ -154,7 +154,7 @@
   sampling_size: 60
 
 - platform: statistics
-  name: "CB31 Taxa Segundo"
+  name: "Aguada CB31 Taxa Segundo"
   unique_id: aguada_cb31_taxa_segundo
   entity_id: sensor.aguada_cb31_volume
   state_characteristic: change_second
@@ -163,7 +163,7 @@
   sampling_size: 60
 
 - platform: statistics
-  name: "CB32 Taxa Segundo"
+  name: "Aguada CB32 Taxa Segundo"
   unique_id: aguada_cb32_taxa_segundo
   entity_id: sensor.aguada_cb32_volume
   state_characteristic: change_second
@@ -172,7 +172,7 @@
   sampling_size: 60
 
 - platform: statistics
-  name: "CIE1 Taxa Segundo"
+  name: "Aguada CIE1 Taxa Segundo"
   unique_id: aguada_cie1_taxa_segundo
   entity_id: sensor.aguada_cie1_volume
   state_characteristic: change_second
@@ -181,7 +181,7 @@
   sampling_size: 60
 
 - platform: statistics
-  name: "CIE2 Taxa Segundo"
+  name: "Aguada CIE2 Taxa Segundo"
   unique_id: aguada_cie2_taxa_segundo
   entity_id: sensor.aguada_cie2_volume
   state_characteristic: change_second
@@ -194,7 +194,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 - platform: statistics
-  name: "CON Pct Média 7d"
+  name: "Aguada CON Pct Média 7d"
   unique_id: aguada_con_pct_media_7d
   entity_id: sensor.aguada_con_pct
   state_characteristic: mean
@@ -203,7 +203,7 @@
   sampling_size: 2500
 
 - platform: statistics
-  name: "CAV Pct Média 7d"
+  name: "Aguada CAV Pct Média 7d"
   unique_id: aguada_cav_pct_media_7d
   entity_id: sensor.aguada_cav_pct
   state_characteristic: mean
@@ -212,7 +212,7 @@
   sampling_size: 2500
 
 - platform: statistics
-  name: "CB31 Pct Média 7d"
+  name: "Aguada CB31 Pct Média 7d"
   unique_id: aguada_cb31_pct_media_7d
   entity_id: sensor.aguada_cb31_pct
   state_characteristic: mean
@@ -221,7 +221,7 @@
   sampling_size: 2500
 
 - platform: statistics
-  name: "CB32 Pct Média 7d"
+  name: "Aguada CB32 Pct Média 7d"
   unique_id: aguada_cb32_pct_media_7d
   entity_id: sensor.aguada_cb32_pct
   state_characteristic: mean
@@ -230,7 +230,7 @@
   sampling_size: 2500
 
 - platform: statistics
-  name: "CIE1 Pct Média 7d"
+  name: "Aguada CIE1 Pct Média 7d"
   unique_id: aguada_cie1_pct_media_7d
   entity_id: sensor.aguada_cie1_pct
   state_characteristic: mean
@@ -239,7 +239,7 @@
   sampling_size: 2500
 
 - platform: statistics
-  name: "CIE2 Pct Média 7d"
+  name: "Aguada CIE2 Pct Média 7d"
   unique_id: aguada_cie2_pct_media_7d
   entity_id: sensor.aguada_cie2_pct
   state_characteristic: mean

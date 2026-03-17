@@ -37,6 +37,7 @@ void nvs_config_defaults(node_config_t *cfg, uint16_t node_id) {
 
     cfg->vbat_enabled         = false;
     cfg->vbat_pin             = 0;
+    cfg->vbat_div             = 2;   // default: equal-resistor voltage divider
     cfg->deep_sleep_enabled   = false;
     cfg->led_enabled          = true;
 

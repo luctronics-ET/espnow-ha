@@ -20,6 +20,13 @@ import serial
 import paho.mqtt.client as mqtt
 import yaml
 
+try:
+    from influxdb_client import InfluxDBClient, Point
+    from influxdb_client.client.write_api import SYNCHRONOUS
+    _INFLUX_OK = True
+except ImportError:
+    _INFLUX_OK = False
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -85,6 +92,7 @@ def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: di
             "vt":   "{{ value_json.level_cm }}",
             "uom":  "cm",
             "dc":   "distance",
+            "sc":   "measurement",
             "icon": "mdi:water-level",
         },
         {
@@ -94,6 +102,7 @@ def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: di
             "vt":   "{{ value_json.pct }}",
             "uom":  "%",
             "dc":   None,
+            "sc":   "measurement",
             "icon": "mdi:percent",
         },
         {
@@ -103,6 +112,7 @@ def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: di
             "vt":   "{{ value_json.volume_L }}",
             "uom":  "L",
             "dc":   None,
+            "sc":   "measurement",
             "icon": "mdi:water",
         },
         {
@@ -112,6 +122,7 @@ def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: di
             "vt":   "{{ value_json.distance_cm }}",
             "uom":  "cm",
             "dc":   "distance",
+            "sc":   "measurement",
             "icon": "mdi:ruler",
         },
         {
@@ -121,7 +132,18 @@ def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: di
             "vt":   "{{ value_json.rssi }}",
             "uom":  "dBm",
             "dc":   "signal_strength",
+            "sc":   "measurement",
             "icon": "mdi:wifi",
+        },
+        {
+            "name": f"{name_pfx} - Bateria",
+            "uid":  f"{uid_pfx}_bateria",
+            "oid":  f"aguada_{alias}_bateria",
+            "vt":   "{{ value_json.vbat }}",
+            "uom":  "V",
+            "dc":   "voltage",
+            "sc":   "measurement",
+            "icon": "mdi:battery",
         },
     ]
 
@@ -133,6 +155,7 @@ def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: di
             "state_topic":         state_tp,
             "value_template":      e["vt"],
             "unit_of_measurement": e["uom"],
+            "state_class":         e["sc"],
             "device":              dev,
             "availability_topic":       avail_tp,
             "payload_available":        "online",
@@ -172,6 +195,48 @@ class NodeTracker:
                 self._client.publish(mqtt_topic_status(node_id), "offline", retain=True)
                 log.warning("Node %s → offline (no data for %ds)", node_id, self._timeout)
 
+# ── InfluxDB writer ──────────────────────────────────────────────────────────
+
+class InfluxWriter:
+    """Optional InfluxDB 2.x writer — only active when --influx-url is passed."""
+
+    def __init__(self, url: str, token: str, org: str, bucket: str):
+        if not _INFLUX_OK:
+            raise RuntimeError(
+                "influxdb-client not installed. Run: pip install 'influxdb-client'"
+            )
+        self._bucket = bucket
+        self._org    = org
+        self._client = InfluxDBClient(url=url, token=token, org=org)
+        self._write  = self._client.write_api(write_options=SYNCHRONOUS)
+        log.info("InfluxDB: %s  org=%s  bucket=%s", url, org, bucket)
+
+    def write_sensor(self, node_id: str, sensor_id: int, alias: str, data: dict):
+        p = (
+            Point("reservoir")
+            .tag("node_id",   node_id)
+            .tag("sensor_id", str(sensor_id))
+            .tag("alias",     alias)
+            .field("distance_cm", int(data["distance_cm"]))
+            .field("level_cm",    float(data["level_cm"]))
+            .field("pct",         float(data["pct"]))
+            .field("volume_L",    int(data["volume_L"]))
+            .field("rssi",        int(data["rssi"]))
+        )
+        if data.get("vbat") is not None:
+            p = p.field("vbat", float(data["vbat"]))
+        try:
+            self._write.write(bucket=self._bucket, org=self._org, record=p)
+        except Exception as e:
+            log.warning("InfluxDB write error: %s", e)
+
+    def close(self):
+        try:
+            self._client.close()
+        except Exception:
+            pass
+
+
 # ── Message handlers ──────────────────────────────────────────────────────────
 
 class Bridge:
@@ -189,6 +254,14 @@ class Bridge:
             self.client.username_pw_set(args.mqtt_user, args.mqtt_password)
         self.tracker = NodeTracker(self.client, args.offline_timeout)
         self._discovery_sent: set = set()
+        self._influx: InfluxWriter | None = None
+        if args.influx_url:
+            self._influx = InfluxWriter(
+                url=args.influx_url,
+                token=args.influx_token,
+                org=args.influx_org,
+                bucket=args.influx_bucket,
+            )
 
         # Subscribe to command topics
         self.client.on_connect    = self._on_mqtt_connect
@@ -275,6 +348,9 @@ class Bridge:
         log.info("%-6s dist=%3dcm  level=%3dcm  pct=%5.1f%%  vol=%dL",
                  cfg.get("alias", key), distance_cm, calcs["level_cm"],
                  calcs["pct"], calcs["volume_L"])
+
+        if self._influx:
+            self._influx.write_sensor(node_id, sensor_id, cfg.get("alias", ""), payload)
 
     def _handle_heartbeat(self, msg: dict):
         node_id = msg["node_id"].upper()
@@ -383,6 +459,8 @@ class Bridge:
             ser.close()
             self.client.loop_stop()
             self.client.disconnect()
+            if self._influx:
+                self._influx.close()
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -397,6 +475,10 @@ def main():
     parser.add_argument("--mqtt-password",   default="")
     parser.add_argument("--offline-timeout", default=300, type=int,
                         help="Seconds without data before node is marked offline")
+    parser.add_argument("--influx-url",    default="",            help="InfluxDB 2.x URL (ex: http://localhost:8086). Omita para desativar.")
+    parser.add_argument("--influx-token",  default="",            help="InfluxDB API token")
+    parser.add_argument("--influx-org",    default="aguada",      help="InfluxDB org")
+    parser.add_argument("--influx-bucket", default="reservoirs",  help="InfluxDB bucket")
     parser.add_argument("--debug",           action="store_true")
     args = parser.parse_args()
 

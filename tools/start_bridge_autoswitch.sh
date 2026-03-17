@@ -11,6 +11,11 @@ REMOTE_PORT="1883"
 MQTT_USER="aguada"
 MQTT_PASS="aguadagtw01"
 
+INFLUX_URL="http://localhost:8086"
+INFLUX_TOKEN="aguada-admin-token-2024"
+INFLUX_ORG="aguada"
+INFLUX_BUCKET="reservoirs"
+
 BRIDGE_LOG="/tmp/bridge_debug.log"
 BROKER_LOG="/tmp/local_mqtt.log"
 SWITCH_LOG="/tmp/bridge_autoswitch.log"
@@ -90,6 +95,10 @@ ensure_bridge_target() {
     --mqtt-port "$REMOTE_PORT" \
     --mqtt-user "$MQTT_USER" \
     --mqtt-password "$MQTT_PASS" \
+    --influx-url "$INFLUX_URL" \
+    --influx-token "$INFLUX_TOKEN" \
+    --influx-org "$INFLUX_ORG" \
+    --influx-bucket "$INFLUX_BUCKET" \
     --debug > "$BRIDGE_LOG" 2>&1 &
 
   echo "[$(date '+%F %T')] bridge started pid=$! target=$target_host" >> "$SWITCH_LOG"

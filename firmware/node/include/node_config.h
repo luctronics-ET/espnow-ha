@@ -29,6 +29,7 @@ typedef struct {
     // Optional features
     bool        vbat_enabled;
     uint8_t     vbat_pin;
+    uint8_t     vbat_div;           // voltage divider ratio: 1=direct, 2=equal resistors
     bool        deep_sleep_enabled;
     bool        led_enabled;
 

@@ -66,6 +66,8 @@ def cmd_config(args):
         "filter_window":      args.filter_window,
         "filter_outlier_cm":  args.outlier,
         "filter_threshold_cm":args.threshold,
+        "vbat_pin":           args.vbat_pin,
+        "vbat_enabled":       args.vbat_enabled,
     }
     send_json(ser, payload)
     ser.close()
@@ -97,6 +99,10 @@ def main():
     p_cfg.add_argument("--filter-window", default=5,   type=int)
     p_cfg.add_argument("--outlier",       default=10,  type=int)
     p_cfg.add_argument("--threshold",     default=2,   type=int)
+    p_cfg.add_argument("--vbat-pin",      default=0,   type=int,
+                       help="GPIO pin for vbat ADC (0=unchanged)")
+    p_cfg.add_argument("--vbat-enabled",  action="store_true",
+                       help="Enable vbat ADC reading")
     p_cfg.set_defaults(func=cmd_config)
 
     args = parser.parse_args()

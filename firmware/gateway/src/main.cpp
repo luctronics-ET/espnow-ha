@@ -117,38 +117,48 @@ static void on_recv(const espnow_packet_t *pkt, const uint8_t *src_mac) {
 }
 
 // ── Command → ESP-NOW ─────────────────────────────────────────────────────────
+// Commands are sent via broadcast MAC so that nodes can receive them without
+// needing to register the gateway as a peer. Only the target node (matching
+// node_id in the packet) will process the command.
+static const uint8_t BCAST_MAC[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 
 static void cmd_restart(uint16_t node_id) {
-    const uint8_t *mac = find_mac(node_id);
-    if (!mac) { ESP_LOGW(TAG, "No MAC for 0x%04X", node_id); return; }
-
     espnow_packet_t pkt = {};
     pkt.version = PROTO_VERSION;
     pkt.type    = PKT_CMD_RESTART;
     pkt.node_id = node_id;
     pkt.ttl     = DEFAULT_TTL;
-    gw_espnow_send(&pkt, mac);
+    gw_espnow_send(&pkt, BCAST_MAC);
     ESP_LOGI(TAG, "CMD_RESTART → 0x%04X", node_id);
 }
 
 static void cmd_config(uint16_t node_id, const JsonDocument &doc) {
-    const uint8_t *mac = find_mac(node_id);
-    if (!mac) { ESP_LOGW(TAG, "No MAC for 0x%04X", node_id); return; }
 
     espnow_packet_t pkt = {};
-    pkt.version = PROTO_VERSION;
-    pkt.type    = PKT_CMD_CONFIG;
-    pkt.node_id = node_id;
-    pkt.ttl     = DEFAULT_TTL;
-    pkt.flags   = FLAG_CONFIG_PENDING;
-    gw_espnow_send(&pkt, mac);
-    ESP_LOGI(TAG, "CMD_CONFIG → 0x%04X", node_id);
-    (void)doc;
+    pkt.version   = PROTO_VERSION;
+    pkt.type      = PKT_CMD_CONFIG;
+    pkt.node_id   = node_id;
+    pkt.ttl       = DEFAULT_TTL;
+    pkt.flags     = FLAG_CONFIG_PENDING;
+
+    // Encode vbat config in spare fields (safe for CMD_CONFIG direction):
+    //   sensor_id → vbat_pin   (0 = unchanged / disabled)
+    //   reserved  → vbat_enabled (0=false, 1=true)
+    if (doc["vbat_pin"].is<uint8_t>())
+        pkt.sensor_id = doc["vbat_pin"].as<uint8_t>();
+    if (doc["vbat_enabled"].is<bool>() || doc["vbat_enabled"].is<int>())
+        pkt.reserved  = doc["vbat_enabled"].as<bool>() ? 1 : 0;
+    if (doc["vbat_div"].is<uint8_t>())
+        pkt.distance_cm = doc["vbat_div"].as<uint8_t>();  // reuse field for vbat_div (0=no change)
+
+    esp_err_t err = gw_espnow_send(&pkt, BCAST_MAC);
+    ESP_LOGI(TAG, "CMD_CONFIG → 0x%04X  vbat_pin=%d vbat_enabled=%d vbat_div=%d err=%d",
+             node_id, pkt.sensor_id, pkt.reserved, pkt.distance_cm, (int)err);
 }
 
 // ── Serial command parser ─────────────────────────────────────────────────────
 
-static char   s_buf[512];
+static char   s_buf[1024];
 static size_t s_buf_len = 0;
 
 static void process_cmd(const char *str) {
@@ -198,6 +208,8 @@ static void serial_tick(void) {
 
 void setup(void) {
     Serial.begin(115200);
+    // Increase USB CDC RX buffer so large JSON commands (>256 bytes) are not truncated
+    Serial.setRxBufferSize(1024);
     delay(300);
 
     s_pkt_queue = xQueueCreate(PKT_QUEUE_LEN, sizeof(pkt_event_t));

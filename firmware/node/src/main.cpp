@@ -29,9 +29,12 @@ static const char *TAG = "node";
 static node_config_t g_cfg;
 static uint16_t      g_seq = 0;
 
+// Deferred config-save flag — set in ESP-NOW callback, processed in loop()
+static volatile bool g_config_save_pending = false;
+
 // Relay mode: track seen seq numbers to avoid re-forwarding duplicates
 #define RELAY_SEEN_SIZE 32
-static uint16_t s_relay_seen[RELAY_SEEN_SIZE];
+static uint32_t s_relay_seen[RELAY_SEEN_SIZE];
 static uint8_t  s_relay_seen_idx = 0;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -51,21 +54,27 @@ static void led_blink(int count, int ms) {
 
 static int8_t read_vbat(void) {
     if (!g_cfg.vbat_enabled) return -1;
-    // ADC 12-bit, Vref ~3.3V; adjust for your voltage divider
-    int raw = analogRead(g_cfg.vbat_pin);
-    float v = (raw / 4095.0f) * 3.3f * 2.0f; // 1:1 divider assumed
-    return (int8_t)(v * 10.0f);               // tenths of V
+    // ADC 12-bit, Vref ~3.3V — average 8 samples for noise reduction
+    // vbat_div=1: direct connection; vbat_div=2: equal-resistor voltage divider
+    // 4 warm-up reads first: allows ADC sampling capacitor to charge fully,
+    // critical when source impedance is high (e.g. 100k–1M resistor divider)
+    for (int i = 0; i < 4; i++) { analogRead(g_cfg.vbat_pin); delayMicroseconds(200); }
+    int sum = 0;
+    for (int i = 0; i < 8; i++) { sum += analogRead(g_cfg.vbat_pin); delayMicroseconds(200); }
+    float raw = sum / 8.0f;
+    float div = (float)(g_cfg.vbat_div > 0 ? g_cfg.vbat_div : 1);
+    float v = (raw / 4095.0f) * 3.3f * div;
+    return (int8_t)roundf(v * 10.0f);  // tenths of V, rounded
 }
 
 static bool relay_seen(uint16_t node_id, uint16_t seq) {
     uint32_t key = ((uint32_t)node_id << 16) | seq;
     for (int i = 0; i < RELAY_SEEN_SIZE; i++) {
-        if (s_relay_seen[i] == (uint16_t)(key & 0xFFFF)) {
-            // simple heuristic: match bottom 16 bits — good enough for TTL=8 hops
+        if (s_relay_seen[i] == key) {
             return true;
         }
     }
-    s_relay_seen[s_relay_seen_idx % RELAY_SEEN_SIZE] = (uint16_t)(key & 0xFFFF);
+    s_relay_seen[s_relay_seen_idx % RELAY_SEEN_SIZE] = key;
     s_relay_seen_idx++;
     return false;
 }
@@ -123,15 +132,18 @@ static void on_recv(const espnow_packet_t *pkt, const uint8_t *src_mac) {
             esp_restart();
         }
         else if (pkt->type == PKT_CMD_CONFIG) {
-            // CMD_CONFIG payload is a node_config_t embedded after the header
-            // (handled in gateway→node direction; node just saves & restarts)
-            ESP_LOGI(TAG, "CMD_CONFIG received, saving...");
-            // In a full implementation the config bytes follow the packet header
-            // For now, flag it
-            g_cfg.fw_version[0] = 0; // trigger re-init on next boot
-            nvs_config_save(&g_cfg);
-            delay(100);
-            esp_restart();
+            ESP_LOGI(TAG, "CMD_CONFIG received, scheduling save...");
+            // Gateway encodes vbat config in spare fields:
+            //   pkt->sensor_id  → vbat_pin     (0 = don't update)
+            //   pkt->reserved   → vbat_enabled  (0=false, 1=true)
+            //   pkt->distance_cm → vbat_div     (0 = don't update, 1=direct, 2=÷2 divider)
+            if (pkt->sensor_id > 0)
+                g_cfg.vbat_pin = pkt->sensor_id;
+            g_cfg.vbat_enabled = (pkt->reserved != 0);
+            if (pkt->distance_cm > 0 && pkt->distance_cm <= 8)
+                g_cfg.vbat_div = (uint8_t)pkt->distance_cm;
+            // Defer NVS write to loop() — NVS must not be called from WiFi task
+            g_config_save_pending = true;
         }
     }
 
@@ -242,6 +254,16 @@ void setup(void) {
 // ── Loop ──────────────────────────────────────────────────────────────────────
 
 void loop(void) {
+    // Handle deferred config save (cannot call NVS from ESP-NOW WiFi callback)
+    if (g_config_save_pending) {
+        g_config_save_pending = false;
+        esp_err_t err = nvs_config_save(&g_cfg);
+        ESP_LOGI(TAG, "CMD_CONFIG save: vbat_pin=%d vbat_enabled=%d err=%d",
+                 g_cfg.vbat_pin, g_cfg.vbat_enabled, (int)err);
+        delay(100);
+        esp_restart();
+    }
+
     // Sensor tick (se habilitado)
     if (g_cfg.num_sensors > 0) {
         for (uint8_t i = 0; i < 2; i++) {

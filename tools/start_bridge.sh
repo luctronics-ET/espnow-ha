@@ -10,7 +10,11 @@ MQTT_HOST="192.168.0.177"
 MQTT_PORT="1883"
 MQTT_USER="aguada"
 MQTT_PASS="aguadagtw01"
-
+# ── InfluxDB 2.x (local) ──────────────────────────────────────────────────────
+INFLUX_URL="http://localhost:8086"
+INFLUX_TOKEN="aguada-admin-token-2024"
+INFLUX_ORG="aguada"
+INFLUX_BUCKET="reservoirs"
 # ── Detect gateway port (by serial MAC 80:F1:B2:50:31:34) ────────────────────
 GATEWAY_PORT=""
 for p in /dev/ttyACM*; do
@@ -49,4 +53,8 @@ exec python3 "$SCRIPT_DIR/bridge.py" \
     --mqtt-port "$MQTT_PORT" \
     --mqtt-user "$MQTT_USER" \
     --mqtt-password "$MQTT_PASS" \
+    --influx-url "$INFLUX_URL" \
+    --influx-token "$INFLUX_TOKEN" \
+    --influx-org "$INFLUX_ORG" \
+    --influx-bucket "$INFLUX_BUCKET" \
     $EXTRA_ARGS

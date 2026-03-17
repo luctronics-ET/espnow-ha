@@ -1,0 +1,58 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Aguada — InfluxDB 2.x + Grafana
+#
+# Inicialização (1ª vez):
+#   cd tools && docker compose up -d
+#
+# InfluxDB:  http://localhost:8086   user: admin  senha: aguada2024
+# Grafana:   http://localhost:3000   user: admin  senha: aguada2024
+#
+# Token padrão para bridge.py: aguada-admin-token-2024
+#   python bridge.py --influx-url http://localhost:8086 \
+#                    --influx-token aguada-admin-token-2024
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: aguada-influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE:        setup
+      DOCKER_INFLUXDB_INIT_USERNAME:    admin
+      DOCKER_INFLUXDB_INIT_PASSWORD:    aguada2024
+      DOCKER_INFLUXDB_INIT_ORG:         aguada
+      DOCKER_INFLUXDB_INIT_BUCKET:      reservoirs
+      DOCKER_INFLUXDB_INIT_RETENTION:   0        # retenção infinita
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: aguada-admin-token-2024
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: aguada-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      GF_SECURITY_ADMIN_USER:     admin
+      GF_SECURITY_ADMIN_PASSWORD: aguada2024
+      GF_USERS_ALLOW_SIGN_UP:     "false"
+    depends_on:
+      influxdb:
+        condition: service_healthy
+
+volumes:
+  influxdb-data:
+  grafana-data:
