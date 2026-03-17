@@ -35,7 +35,6 @@
 #define FLAG_SENSOR_ERROR   (1 << 2)
 #define FLAG_LOW_BATTERY    (1 << 3)
 #define FLAG_CONFIG_PENDING (1 << 4)
-#define FLAG_CFG_NUM_SENSORS (1 << 5)  // CMD_CONFIG carries num_sensors in distance_cm high byte
 
 #define DISTANCE_ERROR      0xFFFF
 

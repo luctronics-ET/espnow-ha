@@ -51,3 +51,4 @@ Arquivos de referência neste repositório:
 
 - O arquivo `homeassistant/mqtt_sensors.yaml` é **legado** e não deve ser usado junto com discovery.
 - Especificação oficial: `AGUADA_SYSTEM_DOC.md`.
+- Pinagem atual de Node/Relay: `PINAGEM.md`.

@@ -129,11 +129,40 @@ Dashboard: cards HA com nível, %, volume, RSSI por reservatório.
 
 ---
 
+### Fase 11 — PoC ESPHome (avaliação de migração)
+**Status: 🟠 Planejado**
+
+Objetivo: decidir com evidências se vale migrar parte do sistema para ESPHome sem perder robustez da malha ESP-NOW.
+
+Escopo do PoC (2 trilhas):
+- **Trilha A (híbrida, recomendada):** manter node/gateway/bridge atuais e integrar ESPHome via MQTT/HA para controle/UX.
+- **Trilha B (experimental):** 1 nó com ESPHome (Wi-Fi + OTA + deep sleep + sensor ultrassônico) para comparação direta.
+
+Métricas de comparação (coletar por no mínimo 72h):
+- Confiabilidade de telemetria: `% de mensagens recebidas` e gaps > 2× intervalo nominal.
+- Consumo energético: estimativa de autonomia por bateria (mesma célula e duty-cycle).
+- Latência ponta a ponta: medição → entidade HA atualizada.
+- Estabilidade OTA: taxa de sucesso e tempo médio de atualização.
+- Manutenção: tempo para configurar novo nó e tempo de troubleshooting.
+
+Critério de decisão (Go/No-Go):
+- **Go parcial (adoção híbrida):** se ESPHome reduzir esforço operacional sem piorar confiabilidade (>98% entrega) nem autonomia de forma relevante.
+- **No-Go para migração total:** se mesh/relay/consumo ficarem piores que o stack atual ESP-NOW.
+
+Entregáveis:
+- Relatório curto com tabela comparativa A vs B.
+- Recomendação final: manter atual, híbrido, ou plano de migração por fases.
+- Lista de riscos (especialmente ESP-NOW mesh, OTA e deep sleep simultâneos).
+
+---
+
 ## Próximas Ações Imediatas
 
 1. **Compilar node** — `cd firmware/node && pio run`
 2. **Compilar gateway** — `cd firmware/gateway && pio run`
 3. **Primeiro teste integrado** — node + gateway + bridge.py + HA
+4. **Iniciar PoC ESPHome (trilha A)** — criar 1 device ESPHome para consumir/publicar MQTT `aguada/...`
+5. **Planejar trilha B** — preparar 1 nó experimental ESPHome para benchmark de 72h
 
 ---
 

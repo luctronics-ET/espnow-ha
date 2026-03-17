@@ -144,33 +144,16 @@ static void cmd_config(uint16_t node_id, const JsonDocument &doc) {
     // Encode vbat config in spare fields (safe for CMD_CONFIG direction):
     //   sensor_id → vbat_pin   (0 = unchanged / disabled)
     //   reserved  → vbat_enabled (0=false, 1=true)
-    //   distance_cm low byte  → vbat_div     (0 = unchanged)
-    //   distance_cm high byte → num_sensors  (only if FLAG_CFG_NUM_SENSORS is set)
     if (doc["vbat_pin"].is<uint8_t>())
         pkt.sensor_id = doc["vbat_pin"].as<uint8_t>();
     if (doc["vbat_enabled"].is<bool>() || doc["vbat_enabled"].is<int>())
         pkt.reserved  = doc["vbat_enabled"].as<bool>() ? 1 : 0;
-    uint8_t cfg_vbat_div = 0;
     if (doc["vbat_div"].is<uint8_t>())
-        cfg_vbat_div = doc["vbat_div"].as<uint8_t>();
-
-    uint8_t cfg_num_sensors = 0;
-    bool has_num_sensors = false;
-    if (doc["num_sensors"].is<uint8_t>() || doc["num_sensors"].is<int>()) {
-        int ns = doc["num_sensors"].as<int>();
-        if (ns >= 0 && ns <= 2) {
-            has_num_sensors = true;
-            cfg_num_sensors = (uint8_t)ns;
-            pkt.flags |= FLAG_CFG_NUM_SENSORS;
-        }
-    }
-
-    pkt.distance_cm = ((uint16_t)cfg_num_sensors << 8) | cfg_vbat_div;
+        pkt.distance_cm = doc["vbat_div"].as<uint8_t>();  // reuse field for vbat_div (0=no change)
 
     esp_err_t err = gw_espnow_send(&pkt, BCAST_MAC);
-    ESP_LOGI(TAG, "CMD_CONFIG → 0x%04X  vbat_pin=%d vbat_enabled=%d vbat_div=%d num_sensors=%d has_ns=%d err=%d",
-             node_id, pkt.sensor_id, pkt.reserved, cfg_vbat_div,
-             cfg_num_sensors, has_num_sensors ? 1 : 0, (int)err);
+    ESP_LOGI(TAG, "CMD_CONFIG → 0x%04X  vbat_pin=%d vbat_enabled=%d vbat_div=%d err=%d",
+             node_id, pkt.sensor_id, pkt.reserved, pkt.distance_cm, (int)err);
 }
 
 // ── Serial command parser ─────────────────────────────────────────────────────

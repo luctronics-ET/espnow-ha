@@ -47,4 +47,6 @@ typedef struct {
 #define DEFAULT_ECHO1   0
 #define DEFAULT_TRIG2   3
 #define DEFAULT_ECHO2   2
-#define DEFAULT_LED_PIN 8               // active-low
+#ifndef DEFAULT_LED_PIN
+#define DEFAULT_LED_PIN 8               // active-low on ESP32-C3 SuperMini
+#endif

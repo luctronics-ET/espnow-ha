@@ -10,7 +10,6 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
-#include <Wire.h>
 #include <esp_wifi.h>
 #include <esp_timer.h>
 #include <esp_log.h>
@@ -33,65 +32,10 @@ static uint16_t      g_seq = 0;
 // Deferred config-save flag — set in ESP-NOW callback, processed in loop()
 static volatile bool g_config_save_pending = false;
 
-static void send_hello(void);
-
 // Relay mode: track seen seq numbers to avoid re-forwarding duplicates
 #define RELAY_SEEN_SIZE 32
 static uint32_t s_relay_seen[RELAY_SEEN_SIZE];
 static uint8_t  s_relay_seen_idx = 0;
-
-#ifndef RELAY_BTN_PIN
-#if defined(CONFIG_IDF_TARGET_ESP32C3)
-#define RELAY_BTN_PIN 9
-#else
-#define RELAY_BTN_PIN 0
-#endif
-#endif
-
-#ifndef RELAY_I2C_SDA_PIN
-#if defined(CONFIG_IDF_TARGET_ESP32C3)
-#define RELAY_I2C_SDA_PIN 6
-#define RELAY_I2C_SCL_PIN 7
-#else
-#define RELAY_I2C_SDA_PIN 21
-#define RELAY_I2C_SCL_PIN 22
-#endif
-#endif
-
-#ifndef RELAY_I2C_SCL_PIN
-#if defined(CONFIG_IDF_TARGET_ESP32C3)
-#define RELAY_I2C_SCL_PIN 7
-#else
-#define RELAY_I2C_SCL_PIN 22
-#endif
-#endif
-
-#ifndef RELAY_I2C_ADDR_SHT3X
-#define RELAY_I2C_ADDR_SHT3X 0x44
-#endif
-
-#ifndef RELAY_I2C_ADDR_HD21D
-#define RELAY_I2C_ADDR_HD21D 0x40
-#endif
-
-typedef enum {
-    RELAY_I2C_NONE = 0,
-    RELAY_I2C_SHT3X,
-    RELAY_I2C_HD21D,
-} relay_i2c_sensor_t;
-
-typedef struct {
-    bool     button_last;
-    bool     button_pressed;
-    uint32_t button_press_ms;
-    uint32_t last_led_pulse_ms;
-    uint32_t led_off_deadline_ms;
-    uint32_t last_i2c_read_ms;
-    bool     i2c_ready;
-    relay_i2c_sensor_t i2c_sensor;
-} relay_aux_state_t;
-
-static relay_aux_state_t g_relay_aux = {};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -133,158 +77,6 @@ static bool relay_seen(uint16_t node_id, uint16_t seq) {
     s_relay_seen[s_relay_seen_idx % RELAY_SEEN_SIZE] = key;
     s_relay_seen_idx++;
     return false;
-}
-
-static bool relay_i2c_read_sht3x(float *temp_c, float *hum_pct) {
-    Wire.beginTransmission(RELAY_I2C_ADDR_SHT3X);
-    Wire.write(0x24);  // high repeatability
-    Wire.write(0x00);  // clock stretching disabled
-    if (Wire.endTransmission() != 0) {
-        return false;
-    }
-
-    delay(20);  // conversion time (single-shot)
-
-    if (Wire.requestFrom((uint8_t)RELAY_I2C_ADDR_SHT3X, (uint8_t)6) != 6) {
-        return false;
-    }
-
-    uint16_t raw_t  = ((uint16_t)Wire.read() << 8) | Wire.read();
-    (void)Wire.read();  // crc temp
-    uint16_t raw_rh = ((uint16_t)Wire.read() << 8) | Wire.read();
-    (void)Wire.read();  // crc rh
-
-    *temp_c  = -45.0f + 175.0f * ((float)raw_t / 65535.0f);
-    *hum_pct = 100.0f * ((float)raw_rh / 65535.0f);
-    return true;
-}
-
-static bool relay_i2c_read_hd21d(float *temp_c, float *hum_pct) {
-    // Temperature command (no hold master)
-    Wire.beginTransmission(RELAY_I2C_ADDR_HD21D);
-    Wire.write(0xF3);
-    if (Wire.endTransmission() != 0) {
-        return false;
-    }
-    delay(60);
-    if (Wire.requestFrom((uint8_t)RELAY_I2C_ADDR_HD21D, (uint8_t)3) != 3) {
-        return false;
-    }
-    uint16_t raw_t = ((uint16_t)Wire.read() << 8) | Wire.read();
-    (void)Wire.read(); // crc
-    raw_t &= 0xFFFC;
-
-    // Humidity command (no hold master)
-    Wire.beginTransmission(RELAY_I2C_ADDR_HD21D);
-    Wire.write(0xF5);
-    if (Wire.endTransmission() != 0) {
-        return false;
-    }
-    delay(20);
-    if (Wire.requestFrom((uint8_t)RELAY_I2C_ADDR_HD21D, (uint8_t)3) != 3) {
-        return false;
-    }
-    uint16_t raw_rh = ((uint16_t)Wire.read() << 8) | Wire.read();
-    (void)Wire.read(); // crc
-    raw_rh &= 0xFFFC;
-
-    *temp_c  = -46.85f + 175.72f * ((float)raw_t / 65536.0f);
-    *hum_pct = -6.0f + 125.0f * ((float)raw_rh / 65536.0f);
-    if (*hum_pct < 0.0f) *hum_pct = 0.0f;
-    if (*hum_pct > 100.0f) *hum_pct = 100.0f;
-    return true;
-}
-
-static void relay_aux_init(void) {
-    pinMode(RELAY_BTN_PIN, INPUT_PULLUP);
-    g_relay_aux.button_last = (digitalRead(RELAY_BTN_PIN) == LOW);
-    g_relay_aux.button_pressed = false;
-
-    Wire.begin(RELAY_I2C_SDA_PIN, RELAY_I2C_SCL_PIN);
-    Wire.beginTransmission(RELAY_I2C_ADDR_HD21D);
-    if (Wire.endTransmission() == 0) {
-        g_relay_aux.i2c_ready = true;
-        g_relay_aux.i2c_sensor = RELAY_I2C_HD21D;
-    } else {
-        Wire.beginTransmission(RELAY_I2C_ADDR_SHT3X);
-        if (Wire.endTransmission() == 0) {
-            g_relay_aux.i2c_ready = true;
-            g_relay_aux.i2c_sensor = RELAY_I2C_SHT3X;
-        } else {
-            g_relay_aux.i2c_ready = false;
-            g_relay_aux.i2c_sensor = RELAY_I2C_NONE;
-        }
-    }
-
-    const char *sensor_name = (g_relay_aux.i2c_sensor == RELAY_I2C_HD21D) ? "hd21d" :
-                              (g_relay_aux.i2c_sensor == RELAY_I2C_SHT3X) ? "sht3x" : "none";
-
-    ESP_LOGI(TAG, "Relay aux: btn=%d i2c(sda=%d scl=%d) sensor=%s detected=%s",
-             RELAY_BTN_PIN,
-             RELAY_I2C_SDA_PIN,
-             RELAY_I2C_SCL_PIN,
-             sensor_name,
-             g_relay_aux.i2c_ready ? "yes" : "no");
-    Serial.printf("RELAY_AUX btn=%d i2c_sda=%d i2c_scl=%d sensor=%s detected=%s\n",
-                  RELAY_BTN_PIN,
-                  RELAY_I2C_SDA_PIN,
-                  RELAY_I2C_SCL_PIN,
-                  sensor_name,
-                  g_relay_aux.i2c_ready ? "yes" : "no");
-}
-
-static void relay_aux_tick(void) {
-    uint32_t now = millis();
-
-    // non-blocking status pulse: 30 ms every 2 s
-    if (now - g_relay_aux.last_led_pulse_ms >= 2000) {
-        g_relay_aux.last_led_pulse_ms = now;
-        g_relay_aux.led_off_deadline_ms = now + 30;
-        led_set(true);
-    }
-    if (g_relay_aux.led_off_deadline_ms != 0 && now >= g_relay_aux.led_off_deadline_ms) {
-        g_relay_aux.led_off_deadline_ms = 0;
-        led_set(false);
-    }
-
-    // button: short press -> HELLO, long press (>=5s) -> restart
-    bool pressed = (digitalRead(RELAY_BTN_PIN) == LOW);
-    if (pressed && !g_relay_aux.button_last) {
-        g_relay_aux.button_press_ms = now;
-        g_relay_aux.button_pressed = true;
-    }
-    if (!pressed && g_relay_aux.button_last && g_relay_aux.button_pressed) {
-        uint32_t dt = now - g_relay_aux.button_press_ms;
-        g_relay_aux.button_pressed = false;
-        if (dt >= 5000) {
-            ESP_LOGW(TAG, "Relay button long-press (%lums): restart", (unsigned long)dt);
-            delay(100);
-            esp_restart();
-        } else if (dt >= 40) {
-            ESP_LOGI(TAG, "Relay button short-press (%lums): HELLO", (unsigned long)dt);
-            send_hello();
-        }
-    }
-    g_relay_aux.button_last = pressed;
-
-    // optional local I2C telemetry log every 30s
-    if (g_relay_aux.i2c_ready && (now - g_relay_aux.last_i2c_read_ms >= 30000)) {
-        g_relay_aux.last_i2c_read_ms = now;
-        float temp_c = 0.0f, hum = 0.0f;
-        bool ok = false;
-        if (g_relay_aux.i2c_sensor == RELAY_I2C_HD21D) {
-            ok = relay_i2c_read_hd21d(&temp_c, &hum);
-        } else if (g_relay_aux.i2c_sensor == RELAY_I2C_SHT3X) {
-            ok = relay_i2c_read_sht3x(&temp_c, &hum);
-        }
-
-        if (ok) {
-            const char *sensor_name = (g_relay_aux.i2c_sensor == RELAY_I2C_HD21D) ? "HD21D" : "SHT3x";
-            ESP_LOGI(TAG, "Relay I2C %s: T=%.1fC RH=%.1f%%", sensor_name, temp_c, hum);
-        } else {
-            ESP_LOGW(TAG, "Relay I2C read failed");
-        }
-    }
 }
 
 // ── Build & send a packet ─────────────────────────────────────────────────────
@@ -344,23 +136,12 @@ static void on_recv(const espnow_packet_t *pkt, const uint8_t *src_mac) {
             // Gateway encodes vbat config in spare fields:
             //   pkt->sensor_id  → vbat_pin     (0 = don't update)
             //   pkt->reserved   → vbat_enabled  (0=false, 1=true)
-            //   pkt->distance_cm low byte  → vbat_div    (0 = don't update)
-            //   pkt->distance_cm high byte → num_sensors (0,1,2) when FLAG_CFG_NUM_SENSORS is set
+            //   pkt->distance_cm → vbat_div     (0 = don't update, 1=direct, 2=÷2 divider)
             if (pkt->sensor_id > 0)
                 g_cfg.vbat_pin = pkt->sensor_id;
             g_cfg.vbat_enabled = (pkt->reserved != 0);
-            uint8_t cfg_vbat_div = (uint8_t)(pkt->distance_cm & 0xFF);
-            if (cfg_vbat_div > 0 && cfg_vbat_div <= 8)
-                g_cfg.vbat_div = cfg_vbat_div;
-
-            if (pkt->flags & FLAG_CFG_NUM_SENSORS) {
-                uint8_t cfg_num_sensors = (uint8_t)((pkt->distance_cm >> 8) & 0xFF);
-                if (cfg_num_sensors <= 2) {
-                    g_cfg.num_sensors = cfg_num_sensors;
-                    g_cfg.sensor[0].enabled = (cfg_num_sensors >= 1);
-                    g_cfg.sensor[1].enabled = (cfg_num_sensors >= 2);
-                }
-            }
+            if (pkt->distance_cm > 0 && pkt->distance_cm <= 8)
+                g_cfg.vbat_div = (uint8_t)pkt->distance_cm;
             // Defer NVS write to loop() — NVS must not be called from WiFi task
             g_config_save_pending = true;
         }
@@ -451,9 +232,6 @@ void setup(void) {
 
     if (g_cfg.num_sensors == 0) {
         ESP_LOGI(TAG, "Mode: RELAY");
-        Serial.printf("RELAY_BOOT node=0x%04X ttl=%u channel=%u\n",
-                      g_cfg.node_id, g_cfg.ttl_max, g_cfg.espnow_channel);
-        relay_aux_init();
         led_blink(3, 100);
     } else {
         ESP_LOGI(TAG, "Mode: SENSOR (num_sensors=%d)", g_cfg.num_sensors);
@@ -491,8 +269,6 @@ void loop(void) {
         for (uint8_t i = 0; i < 2; i++) {
             sensor_tick(i);
         }
-    } else {
-        relay_aux_tick();
     }
     
     delay(50);

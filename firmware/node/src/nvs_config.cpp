@@ -6,12 +6,23 @@
 
 static const char *TAG = "nvs_cfg";
 
+#ifndef DEFAULT_NUM_SENSORS
+#define DEFAULT_NUM_SENSORS 1
+#endif
+
 void nvs_config_defaults(node_config_t *cfg, uint16_t node_id) {
     memset(cfg, 0, sizeof(*cfg));
     cfg->node_id              = node_id;
     
+    // Build-time override for dedicated relay images
+    if (DEFAULT_NUM_SENSORS == 0) {
+        cfg->num_sensors = 0;
+        cfg->sensor[1].trig_pin   = DEFAULT_TRIG2;
+        cfg->sensor[1].echo_pin   = DEFAULT_ECHO2;
+        cfg->sensor[1].enabled    = false;
+    }
     // Special cases: CIE (0x9EAC) and CB3 (0x2EC4) have 2 sensors
-    if (node_id == 0x9EAC || node_id == 0x2EC4) {
+    else if (node_id == 0x9EAC || node_id == 0x2EC4) {
         cfg->num_sensors = 2;
         cfg->sensor[1].trig_pin   = DEFAULT_TRIG2;
         cfg->sensor[1].echo_pin   = DEFAULT_ECHO2;
