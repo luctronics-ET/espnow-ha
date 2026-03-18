@@ -220,6 +220,19 @@ static void relay_aux_init(void) {
     const char *sensor_name = (g_relay_aux.i2c_sensor == RELAY_I2C_HD21D) ? "hd21d" :
                               (g_relay_aux.i2c_sensor == RELAY_I2C_SHT3X) ? "sht3x" : "none";
 
+    // I2C bus scan — list all responding addresses for diagnostics
+    Serial.printf("I2C scan (sda=%d scl=%d): ", RELAY_I2C_SDA_PIN, RELAY_I2C_SCL_PIN);
+    bool i2c_any = false;
+    for (uint8_t addr = 1; addr < 127; addr++) {
+        Wire.beginTransmission(addr);
+        if (Wire.endTransmission() == 0) {
+            Serial.printf("0x%02X ", addr);
+            i2c_any = true;
+        }
+    }
+    if (!i2c_any) Serial.printf("none");
+    Serial.printf("\n");
+
     ESP_LOGI(TAG, "Relay aux: btn=%d i2c(sda=%d scl=%d) sensor=%s detected=%s",
              RELAY_BTN_PIN,
              RELAY_I2C_SDA_PIN,
@@ -236,6 +249,13 @@ static void relay_aux_init(void) {
 
 static void relay_aux_tick(void) {
     uint32_t now = millis();
+    static uint32_t last_keepalive_ms = 0;
+
+    // Periodic HELLO keepalive every 60s — keeps node online in bridge/HA
+    if (now - last_keepalive_ms >= 60000) {
+        last_keepalive_ms = now;
+        send_hello(false);
+    }
 
     // non-blocking status pulse: 30 ms every 2 s
     if (now - g_relay_aux.last_led_pulse_ms >= 2000) {
@@ -457,7 +477,17 @@ void setup(void) {
     uint8_t mac[6];
     WiFi.mode(WIFI_STA);
     WiFi.macAddress(mac);
+    Serial.printf("MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
     uint16_t node_id = ((uint16_t)mac[4] << 8) | mac[5];
+    if (node_id == 0x0000) {
+        // Some ESP32 clones have blank efuse — derive from full MAC bytes
+        node_id = ((uint16_t)(mac[0] ^ mac[2] ^ mac[4]) << 8)
+                | ((uint16_t)(mac[1] ^ mac[3] ^ mac[5]));
+        if (node_id == 0x0000) node_id = 0xDEAD;  // absolute fallback
+        Serial.printf("WARN: last 2 MAC bytes are 0x0000, derived node_id=0x%04X\n", node_id);
+    }
 
     ESP_LOGI(TAG, "MAC: %02X:%02X:%02X:%02X:%02X:%02X  node_id=0x%04X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], node_id);
