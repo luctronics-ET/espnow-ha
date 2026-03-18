@@ -4,7 +4,9 @@ set -u
 VENV_PY="/home/luc/Dev/espnow-ha/.venv/bin/python"
 BRIDGE="/home/luc/Dev/espnow-ha/tools/bridge.py"
 BROKER="/home/luc/Dev/espnow-ha/tools/mqtt_broker.py"
-GATEWAY_SERIAL="9C:13:9E:AC:E1:88"
+# Optional USB serial short-id for the gateway adapter (udev ID_SERIAL_SHORT).
+# Leave empty to accept the first available /dev/ttyACM* or /dev/ttyUSB*.
+GATEWAY_USB_SERIAL_SHORT="${GATEWAY_USB_SERIAL_SHORT:-}"
 SERIAL_PORT=""
 REMOTE_HOST="192.168.0.177"
 REMOTE_PORT="1883"
@@ -21,15 +23,17 @@ BROKER_LOG="/tmp/local_mqtt.log"
 SWITCH_LOG="/tmp/bridge_autoswitch.log"
 
 detect_gateway_port() {
-  # 1) First, try matching by known USB serial (most reliable)
-  for p in /dev/ttyACM* /dev/ttyUSB*; do
-    [[ -e "$p" ]] || continue
-    serial=$(udevadm info "$p" 2>/dev/null | grep ID_SERIAL_SHORT | cut -d= -f2 || true)
-    if [[ "$serial" == "$GATEWAY_SERIAL" ]]; then
-      echo "$p"
-      return 0
-    fi
-  done
+  # 1) First, try matching by known USB serial short-id (most reliable)
+  if [[ -n "$GATEWAY_USB_SERIAL_SHORT" ]]; then
+    for p in /dev/ttyACM* /dev/ttyUSB*; do
+      [[ -e "$p" ]] || continue
+      serial=$(udevadm info "$p" 2>/dev/null | grep -E '^(E: )?ID_(USB_)?SERIAL_SHORT=' | head -n1 | cut -d= -f2 || true)
+      if [[ "$serial" == "$GATEWAY_USB_SERIAL_SHORT" ]]; then
+        echo "$p"
+        return 0
+      fi
+    done
+  fi
 
   # 2) Fallback: pick first available ACM/USB device
   for p in /dev/ttyACM* /dev/ttyUSB*; do
@@ -79,7 +83,11 @@ ensure_bridge_target() {
       echo "[$(date '+%F %T')] gateway serial not found; will retry" >> "$SWITCH_LOG"
       return 0
     fi
-    echo "[$(date '+%F %T')] gateway port detected: $SERIAL_PORT" >> "$SWITCH_LOG"
+    if [[ -n "$GATEWAY_USB_SERIAL_SHORT" ]]; then
+      echo "[$(date '+%F %T')] gateway port detected: $SERIAL_PORT (usb-serial=$GATEWAY_USB_SERIAL_SHORT)" >> "$SWITCH_LOG"
+    else
+      echo "[$(date '+%F %T')] gateway port detected: $SERIAL_PORT (first available serial device)" >> "$SWITCH_LOG"
+    fi
   fi
 
   if pgrep -f "bridge.py --port $SERIAL_PORT --mqtt $target_host --mqtt-port $REMOTE_PORT" >/dev/null 2>&1; then
@@ -123,7 +131,11 @@ mkdir -p /tmp
 
 SERIAL_PORT="$(detect_gateway_port)"
 if [[ -n "$SERIAL_PORT" ]]; then
-  echo "[$(date '+%F %T')] initial gateway port: $SERIAL_PORT" >> "$SWITCH_LOG"
+  if [[ -n "$GATEWAY_USB_SERIAL_SHORT" ]]; then
+    echo "[$(date '+%F %T')] initial gateway port: $SERIAL_PORT (usb-serial=$GATEWAY_USB_SERIAL_SHORT)" >> "$SWITCH_LOG"
+  else
+    echo "[$(date '+%F %T')] initial gateway port: $SERIAL_PORT (first available serial device)" >> "$SWITCH_LOG"
+  fi
 else
   echo "[$(date '+%F %T')] initial gateway port: not found" >> "$SWITCH_LOG"
 fi

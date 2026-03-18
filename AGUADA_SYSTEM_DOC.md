@@ -201,7 +201,33 @@ bit 1: ota_pending     node aguarda OTA
 bit 2: sensor_error    leitura inválida (distance_cm = 0xFFFF)
 bit 3: low_battery     vbat abaixo do limiar
 bit 4: config_pending  NVS desatualizado
+bit 5: cfg_num_sensors compat legacy: num_sensors em distance_cm high byte
 ```
+
+### Configuração estendida (mantendo 16 bytes)
+
+Para evoluir `CMD_CONFIG` sem alterar `espnow_packet_t`, o transporte de configuração completa passa a reutilizar campos do pacote atual:
+
+```c
+// Somente quando type == PKT_CMD_CONFIG
+sensor_id   -> alvo (0=global, 1/2=sensor específico)
+seq         -> id da transação de configuração
+distance_cm -> config_value_u16
+vbat        -> config_group
+reserved    -> config_item
+flags       -> CFG_FLAG_* (first/last/ack/applied/error)
+```
+
+Grupos previstos:
+
+- `GENERAL`
+- `TIMING`
+- `FILTER`
+- `SENSOR_HW`
+- `VBAT`
+- `COMMIT`
+
+Cada pacote carrega **um item de configuração**. O commit é explícito no final da transação.
 
 ### Tipos de pacote
 
@@ -242,6 +268,20 @@ Recebe JSON de comando da USB → ESP-NOW.
 {"v":3,"type":"HELLO","node_id":"0x9EAC","fw_version":"3.2.0","num_sensors":2,"ts":1741780500}
 ```
 
+**GATEWAY_STATUS:**
+```json
+{"v":3,"type":"GATEWAY_STATUS","fw":"4.0.0","mac":"80:F3:DA:62:A7:84",
+ "transport":"usb","proto":3,"channel":1,"uptime_s":120,"free_heap":237120,
+ "rx_packets":52,"queue_drops":0,"json_tx":68,"cmd_rx":1,"cmd_ok":1,
+ "cmd_fail":0,"bad_json":0,"crc_failures":0,"radio_tx_ok":0,"radio_tx_fail":0,
+ "queue_depth":0,"unhandled_pkt":0,"ts":1741780860}
+```
+
+**CMD_ACK:**
+```json
+{"v":3,"type":"CMD_ACK","cmd":"SETTIME","ok":true,"ts":1741780861}
+```
+
 ### Entrada USB — Comandos do servidor
 
 ```json
@@ -260,6 +300,8 @@ Recebe JSON de comando da USB → ESP-NOW.
 {"cmd":"RESTART","node_id":"0x7758"}
 {"cmd":"OTA_START","node_id":"broadcast","fw_size":819200,"fw_sha256":"a3f1c2..."}
 ```
+
+> Estado atual: a implementação em produção ainda aceita apenas um subconjunto compacto de `CONFIG` (`num_sensors` e parâmetros VBAT). O JSON rico acima continua sendo a interface-alvo, a ser quebrada em itens `config_group/config_item/value` no bridge.
 
 ---
 
@@ -316,6 +358,9 @@ def calculate(distance_cm: int, cfg: dict) -> dict:
 ```
 aguada/{node_id}/{sensor_id}/state    → payload JSON completo
 aguada/{node_id}/status               → "online" / "offline"
+aguada/gateway/status                 → "online" / "offline"
+aguada/gateway/health                 → payload JSON retained do gateway
+aguada/gateway/ack                    → ACKs de comando do gateway
 ```
 
 **Payload state:**
@@ -349,6 +394,17 @@ homeassistant/sensor/aguada_{node_id}_{sensor_id}_level/config →
 ```
 
 Bridge publica entidades para: `level_cm`, `pct`, `volume_L`, `distance_cm`, `rssi`.
+
+Além disso, o bridge publica MQTT Discovery do gateway USB para:
+
+- online (`binary_sensor`)
+- uptime
+- free_heap
+- queue_drops
+- crc_failures
+- cmd_fail
+- radio_tx_fail
+- last_seen
 
 ### Tópicos MQTT subscritos (comandos)
 

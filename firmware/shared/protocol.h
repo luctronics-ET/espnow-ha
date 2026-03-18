@@ -38,6 +38,86 @@
 #define FLAG_CFG_NUM_SENSORS (1 << 5)  // CMD_CONFIG carries num_sensors in distance_cm high byte
 #define FLAG_BTN_HELLO       (1 << 6)  // HELLO sent by button press (not boot)
 
+// Extended config transport (reuses PKT_CMD_CONFIG fields)
+// sensor_id   -> target scope (0=global, 1/2=sensor-specific)
+// seq         -> config transaction id
+// distance_cm -> config value (uint16)
+// vbat        -> config_group
+// reserved    -> config_item
+// flags       -> CFG_FLAG_*
+
+typedef enum : uint8_t {
+    CFG_GROUP_NONE      = 0x00,
+    CFG_GROUP_GENERAL   = 0x01,
+    CFG_GROUP_TIMING    = 0x02,
+    CFG_GROUP_FILTER    = 0x03,
+    CFG_GROUP_SENSOR_HW = 0x04,
+    CFG_GROUP_VBAT      = 0x05,
+    CFG_GROUP_COMMIT    = 0x06,
+} config_group_t;
+
+typedef enum : uint8_t {
+    // CFG_GROUP_GENERAL
+    CFG_ITEM_NUM_SENSORS        = 0x01,
+    CFG_ITEM_LED_ENABLED        = 0x02,
+    CFG_ITEM_DEEP_SLEEP_EN      = 0x03,
+    CFG_ITEM_RESTART_DAILY_H    = 0x04,
+    CFG_ITEM_ESPNOW_CHANNEL     = 0x05,
+    CFG_ITEM_TTL_MAX            = 0x06,
+
+    // CFG_GROUP_TIMING
+    CFG_ITEM_INTERVAL_MEASURE_S = 0x11,
+    CFG_ITEM_INTERVAL_SEND_S    = 0x12,
+    CFG_ITEM_HEARTBEAT_S        = 0x13,
+
+    // CFG_GROUP_FILTER
+    CFG_ITEM_FILTER_WINDOW      = 0x21,
+    CFG_ITEM_FILTER_OUTLIER_CM  = 0x22,
+    CFG_ITEM_FILTER_THRESHOLD_CM = 0x23,
+
+    // CFG_GROUP_SENSOR_HW (sensor_id = 1 or 2)
+    CFG_ITEM_SENSOR_ENABLED     = 0x31,
+    CFG_ITEM_SENSOR_TRIG_PIN    = 0x32,
+    CFG_ITEM_SENSOR_ECHO_PIN    = 0x33,
+
+    // CFG_GROUP_VBAT
+    CFG_ITEM_VBAT_ENABLED       = 0x41,
+    CFG_ITEM_VBAT_PIN           = 0x42,
+    CFG_ITEM_VBAT_DIV           = 0x43,
+
+    // CFG_GROUP_COMMIT
+    CFG_ITEM_COMMIT_APPLY            = 0xF1,
+    CFG_ITEM_COMMIT_SAVE_NVS         = 0xF2,
+    CFG_ITEM_COMMIT_APPLY_AND_SAVE   = 0xF3,
+    CFG_ITEM_COMMIT_SAVE_AND_RESTART = 0xF4,
+} config_item_t;
+
+typedef enum : uint8_t {
+    CFG_ACK_OK                = 0x00,
+    CFG_ACK_INVALID_GROUP     = 0x01,
+    CFG_ACK_INVALID_ITEM      = 0x02,
+    CFG_ACK_INVALID_SENSOR_ID = 0x03,
+    CFG_ACK_INVALID_VALUE     = 0x04,
+    CFG_ACK_RELAY_CONFLICT    = 0x05,
+    CFG_ACK_SAVE_FAILED       = 0x06,
+    CFG_ACK_APPLY_FAILED      = 0x07,
+    CFG_ACK_RESTART_REQUIRED  = 0x08,
+    CFG_ACK_UNSUPPORTED       = 0x09,
+} config_ack_code_t;
+
+#define CFG_FLAG_FIRST         (1 << 0)
+#define CFG_FLAG_LAST          (1 << 1)
+#define CFG_FLAG_REQUIRE_ACK   (1 << 2)
+#define CFG_FLAG_ACK_ERROR     (1 << 5)
+#define CFG_FLAG_ACK_REJECTED  (1 << 6)
+#define CFG_FLAG_ACK_APPLIED   (1 << 7)
+
+#define CFG_VALUE_U16(pkt)        ((uint16_t)((pkt)->distance_cm))
+#define CFG_GROUP(pkt)            ((uint8_t)((pkt)->vbat))
+#define CFG_ITEM(pkt)             ((uint8_t)((pkt)->reserved))
+#define CFG_SENSOR_TARGET(pkt)    ((uint8_t)((pkt)->sensor_id))
+#define CFG_TXN_SEQ(pkt)          ((uint16_t)((pkt)->seq))
+
 // Special sensor_id values
 #define SENSOR_ID_ENV        0xFE      // HEARTBEAT carrying relay I2C env data:
                                        //   distance_cm = (int)(temp_c*10)+1000

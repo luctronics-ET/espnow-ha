@@ -5,9 +5,9 @@
 
 ---
 
-## Estado Atual — 2026-03-12
+## Estado Atual — 2026-03-18
 
-Firmware base escrito do zero seguindo o protocolo v3.2. Ainda não compilado/testado em hardware.
+Gateway USB clássico validado em hardware com bridge/MQTT/Home Assistant. O sistema já publica status/health/ACK do gateway e discovery MQTT para entidades diagnósticas do próprio gateway.
 
 ---
 
@@ -55,42 +55,53 @@ Pendente:
 ---
 
 ### Fase 4 — Gateway USB + JSON Serial
-**Status: ✅ Escrito** — não testado
+**Status: ✅ Validado em hardware**
 
 - `firmware/gateway/src/main.cpp` — recebe ESP-NOW, serializa JSON, parseia comandos
 - `firmware/gateway/src/espnow_gw.cpp` — CRC verify, cache de MACs por node_id
 - Tempo: bridge.py envia `{"cmd":"SETTIME","ts":...}` no startup
+- Observabilidade: `GATEWAY_READY`, `GATEWAY_STATUS`, `CMD_ACK`
 
 Pendente:
-- [ ] Compilar com `pio run` no ESP32-S3
-- [ ] Testar output JSON no serial monitor
-- [ ] Verificar cache MAC para comandos unicast
+- [ ] Implementar configuração estendida item-a-item no node/gateway
+- [ ] Decidir se cache MAC continuará existindo ou será removido
 
 ---
 
 ### Fase 5 — bridge.py + MQTT + HA Discovery
-**Status: ✅ Escrito** — não testado
+**Status: ✅ Validado em hardware**
 
 - `tools/bridge.py` — lê serial, calcula level/volume, publica MQTT, HA Discovery
 - `tools/reservoirs.yaml` — parâmetros dos 5 nodes CMASM
 - `tools/nvs_tool.py` — CLI para enviar CONFIG/RESTART via gateway
+- Publica `aguada/gateway/status`, `aguada/gateway/health`, `aguada/gateway/ack`
+- Publica MQTT Discovery do gateway USB (online + sensores diagnósticos)
 
 Pendente:
-- [ ] Testar com gateway real conectado
-- [ ] Verificar entidades no Home Assistant após HELLO
-- [ ] Testar timeout offline (padrão 300s)
+- [ ] Ajustar Callback API do Paho MQTT para eliminar deprecation warning
+- [ ] Publicar/consumir ACK consolidado quando a configuração estendida for implementada
 
 ---
 
 ### Fase 6 — CMD_CONFIG via ESP-NOW
 **Status: 🟠 Parcial**
 
-Gateway envia `PKT_CMD_CONFIG` com `FLAG_CONFIG_PENDING`. Node reinicia ao receber.
-Full transfer de `node_config_t` ainda não implementado (precisa protocolo extendido ou OTA-style).
+Gateway envia `PKT_CMD_CONFIG` com `FLAG_CONFIG_PENDING`. Hoje o fluxo suporta apenas `num_sensors` e parâmetros de bateria compactados no pacote de 16 bytes.
+
+Direção aprovada para evolução:
+- manter `espnow_packet_t` em 16 bytes
+- transportar configuração estendida item-a-item usando:
+	- `vbat` → `config_group`
+	- `reserved` → `config_item`
+	- `distance_cm` → `config_value_u16`
+	- `seq` → transação
+	- `flags` → controle/ACK
 
 Pendente:
-- [ ] Definir protocolo de transferência de config completa
-- [ ] Implementar no gateway e node
+- [x] Definir mapeamento de grupos/itens/ACK no protocolo compartilhado
+- [ ] Implementar encoder no bridge/gateway
+- [ ] Implementar staging + commit no node
+- [ ] Consolidar ACK final de transação
 
 ---
 
@@ -158,9 +169,9 @@ Entregáveis:
 
 ## Próximas Ações Imediatas
 
-1. **Compilar node** — `cd firmware/node && pio run`
-2. **Compilar gateway** — `cd firmware/gateway && pio run`
-3. **Primeiro teste integrado** — node + gateway + bridge.py + HA
+1. **Implementar CFG_GROUP/CFG_ITEM no bridge/gateway/node**
+2. **Testar transação CONFIG item-a-item em um node real**
+3. **Decidir limpeza final de legados Home Assistant (`mqtt_*_sensors.yaml`)**
 4. **Iniciar PoC ESPHome (trilha A)** — criar 1 device ESPHome para consumir/publicar MQTT `aguada/...`
 5. **Planejar trilha B** — preparar 1 nó experimental ESPHome para benchmark de 72h
 
@@ -171,7 +182,7 @@ Entregáveis:
 - `AGUADA_SYSTEM_DOC.md` é o spec canônico — não alterar comportamento sem refletir lá
 - Parâmetros de reservatório **nunca** vão para o node — ficam em `reservoirs.yaml`
 - node_id = 2 últimos bytes do MAC — sem cadastro manual
-- `.delete/` e `.*_old/` são ignorados pelo git e pelo build
+- diretórios `backup_*` são snapshots locais e não devem mais participar do fluxo normal de desenvolvimento
 
 ---
 

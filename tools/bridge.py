@@ -86,6 +86,140 @@ def mqtt_topic_status(node_id: str) -> str:
 def mqtt_topic_balance(node_id: str, sensor_id: int) -> str:
     return f"aguada/{node_id}/{sensor_id}/balance"
 
+def mqtt_topic_gateway_health() -> str:
+    return "aguada/gateway/health"
+
+def mqtt_topic_gateway_ack() -> str:
+    return "aguada/gateway/ack"
+
+def publish_gateway_discovery(client: mqtt.Client):
+    """Publish HA MQTT Discovery for gateway USB status/health diagnostics."""
+    dev = {
+        "name": "Aguada Gateway USB",
+        "identifiers": ["aguada_gateway_usb"],
+        "manufacturer": "Aguada",
+        "model": "ESP32 USB Gateway",
+    }
+    avail_tp = "aguada/gateway/status"
+    state_tp = mqtt_topic_gateway_health()
+
+    online_payload = {
+        "name": "Gateway USB - Online",
+        "unique_id": "aguada_gateway_usb_online",
+        "default_entity_id": "binary_sensor.aguada_gateway_usb_online",
+        "state_topic": avail_tp,
+        "payload_on": "online",
+        "payload_off": "offline",
+        "device_class": "connectivity",
+        "device": dev,
+        "icon": "mdi:lan-connect",
+    }
+    client.publish(
+        "homeassistant/binary_sensor/aguada_gateway_usb_online/config",
+        json.dumps(online_payload),
+        retain=True,
+    )
+    log.debug("Gateway Discovery: homeassistant/binary_sensor/aguada_gateway_usb_online/config")
+
+    sensors = [
+        {
+            "name": "Gateway USB - Uptime",
+            "uid": "aguada_gateway_usb_uptime",
+            "oid": "aguada_gateway_usb_uptime",
+            "vt": "{{ value_json.uptime_s }}",
+            "uom": "s",
+            "dc": "duration",
+            "sc": "measurement",
+            "icon": "mdi:timer-outline",
+        },
+        {
+            "name": "Gateway USB - Heap Livre",
+            "uid": "aguada_gateway_usb_heap",
+            "oid": "aguada_gateway_usb_heap",
+            "vt": "{{ value_json.free_heap }}",
+            "uom": "B",
+            "dc": None,
+            "sc": "measurement",
+            "icon": "mdi:memory",
+        },
+        {
+            "name": "Gateway USB - Queue Drops",
+            "uid": "aguada_gateway_usb_queue_drops",
+            "oid": "aguada_gateway_usb_queue_drops",
+            "vt": "{{ value_json.queue_drops }}",
+            "uom": None,
+            "dc": None,
+            "sc": "total_increasing",
+            "icon": "mdi:package-variant-closed-remove",
+        },
+        {
+            "name": "Gateway USB - CRC Falhas",
+            "uid": "aguada_gateway_usb_crc_failures",
+            "oid": "aguada_gateway_usb_crc_failures",
+            "vt": "{{ value_json.crc_failures }}",
+            "uom": None,
+            "dc": None,
+            "sc": "total_increasing",
+            "icon": "mdi:alert-circle-outline",
+        },
+        {
+            "name": "Gateway USB - Cmd Fail",
+            "uid": "aguada_gateway_usb_cmd_fail",
+            "oid": "aguada_gateway_usb_cmd_fail",
+            "vt": "{{ value_json.cmd_fail }}",
+            "uom": None,
+            "dc": None,
+            "sc": "total_increasing",
+            "icon": "mdi:close-octagon-outline",
+        },
+        {
+            "name": "Gateway USB - Rádio TX Fail",
+            "uid": "aguada_gateway_usb_radio_tx_fail",
+            "oid": "aguada_gateway_usb_radio_tx_fail",
+            "vt": "{{ value_json.radio_tx_fail }}",
+            "uom": None,
+            "dc": None,
+            "sc": "total_increasing",
+            "icon": "mdi:radio-handheld",
+        },
+        {
+            "name": "Gateway USB - Última atualização",
+            "uid": "aguada_gateway_usb_last_seen",
+            "oid": "aguada_gateway_usb_last_seen",
+            "vt": "{{ value_json.ts_seen_iso }}",
+            "uom": None,
+            "dc": "timestamp",
+            "sc": None,
+            "icon": "mdi:clock-outline",
+        },
+    ]
+
+    for e in sensors:
+        payload = {
+            "name": e["name"],
+            "unique_id": e["uid"],
+            "default_entity_id": f"sensor.{e['oid']}",
+            "state_topic": state_tp,
+            "value_template": e["vt"],
+            "device": dev,
+            "availability_topic": avail_tp,
+            "payload_available": "online",
+            "payload_not_available": "offline",
+            "entity_category": "diagnostic",
+        }
+        if e.get("uom") is not None:
+            payload["unit_of_measurement"] = e["uom"]
+        if e.get("dc"):
+            payload["device_class"] = e["dc"]
+        if e.get("sc"):
+            payload["state_class"] = e["sc"]
+        if e.get("icon"):
+            payload["icon"] = e["icon"]
+
+        disc_topic = f"homeassistant/sensor/{e['uid']}/config"
+        client.publish(disc_topic, json.dumps(payload), retain=True)
+        log.debug("Gateway Discovery: %s", disc_topic)
+
 def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: dict):
     """Publish HA MQTT Discovery config for all entities of a sensor."""
     alias    = cfg.get("alias", f"{node_id}_{sensor_id}").lower()
@@ -456,6 +590,9 @@ class Bridge:
         self._gateway_last_seen = 0.0
         self._gateway_timeout_s = args.gateway_timeout
 
+    def _publish_json(self, topic: str, payload: dict, retain: bool = False):
+        self.client.publish(topic, json.dumps(payload), retain=retain)
+
     def _mark_gateway_seen(self):
         self._gateway_last_seen = time.time()
         if not self._gateway_online:
@@ -465,8 +602,21 @@ class Bridge:
 
     def _mark_gateway_offline(self, reason: str = ""):
         if self._gateway_online:
+            ts_now = int(time.time())
             self._gateway_online = False
             self.client.publish("aguada/gateway/status", "offline", retain=True)
+            self._publish_json(
+                mqtt_topic_gateway_health(),
+                {
+                    "type": "GATEWAY_STATUS",
+                    "online": False,
+                    "reason": reason or "offline",
+                    "ts": ts_now,
+                    "ts_seen": ts_now,
+                    "ts_seen_iso": ts_to_iso(ts_now),
+                },
+                retain=True,
+            )
             if reason:
                 log.warning("Gateway → offline (%s)", reason)
             else:
@@ -484,6 +634,7 @@ class Bridge:
                 retain=True,
             )
             client.subscribe("aguada/cmd/#")
+            publish_gateway_discovery(client)
 
             # Re-publish HA Discovery on every (re)connect to survive broker
             # restarts/retained cleanup without requiring node reboot (HELLO).
@@ -712,10 +863,82 @@ class Bridge:
     def _handle_gateway_ready(self, msg: dict):
         log.info("Gateway ready: mac=%s fw=%s", msg.get("mac"), msg.get("fw"))
         self._mark_gateway_seen()
+        ready_payload = dict(msg)
+        ready_payload["online"] = True
+        ready_payload["ts_seen"] = int(time.time())
+        ready_payload["ts_seen_iso"] = ts_to_iso(ready_payload["ts_seen"])
+        self._publish_json(mqtt_topic_gateway_health(), ready_payload, retain=True)
         # Send current time to gateway
         self._serial_write(json.dumps({"cmd": "SETTIME", "ts": int(time.time())}))
 
+    def _handle_gateway_status(self, msg: dict):
+        self._mark_gateway_seen()
+        health_payload = dict(msg)
+        health_payload["online"] = True
+        health_payload["ts_seen"] = int(time.time())
+        health_payload["ts_seen_iso"] = ts_to_iso(health_payload["ts_seen"])
+        self._publish_json(mqtt_topic_gateway_health(), health_payload, retain=True)
+        log.info(
+            "Gateway status: up=%ss heap=%s rx=%s drops=%s crc_fail=%s cmd_ok=%s cmd_fail=%s",
+            msg.get("uptime_s"),
+            msg.get("free_heap"),
+            msg.get("rx_packets"),
+            msg.get("queue_drops"),
+            msg.get("crc_failures"),
+            msg.get("cmd_ok"),
+            msg.get("cmd_fail"),
+        )
+
+    def _handle_cmd_ack(self, msg: dict):
+        self._mark_gateway_seen()
+        ack_payload = dict(msg)
+        ack_payload["ts_seen"] = int(time.time())
+        self._publish_json(mqtt_topic_gateway_ack(), ack_payload, retain=False)
+        cmd = msg.get("cmd", "?")
+        if msg.get("ok"):
+            log.info("Gateway ACK: cmd=%s node=%s", cmd, msg.get("node_id", "-"))
+        else:
+            log.warning(
+                "Gateway ACK failed: cmd=%s node=%s reason=%s err=%s",
+                cmd,
+                msg.get("node_id", "-"),
+                msg.get("reason", "-"),
+                msg.get("err", "-"),
+            )
+
+    def _normalize_serial_line(self, line: str) -> str:
+        line = line.strip()
+        if not line:
+            return ""
+        if line.startswith("{"):
+            return line
+        json_start = line.find("{")
+        if json_start >= 0:
+            return line[json_start:].strip()
+        return line
+
+    def _read_serial_line(self, ser: serial.Serial) -> str:
+        raw = ser.readline().decode(errors="replace")
+        return self._normalize_serial_line(raw)
+
+    def _drain_startup_serial(self, ser: serial.Serial, duration_s: float):
+        deadline = time.time() + duration_s
+        while time.time() < deadline:
+            try:
+                line = self._read_serial_line(ser)
+            except serial.SerialException as e:
+                log.error("Serial error during startup drain: %s", e)
+                self._mark_gateway_offline("serial error")
+                return
+            if not line:
+                continue
+            log.debug("↺ startup: %s", line)
+            self.dispatch(line)
+
     def dispatch(self, line: str):
+        line = self._normalize_serial_line(line)
+        if not line:
+            return
         try:
             msg = json.loads(line)
         except Exception:
@@ -730,6 +953,8 @@ class Bridge:
         elif t == "HEARTBEAT":      self._handle_heartbeat(msg)
         elif t == "HELLO":          self._handle_hello(msg)
         elif t == "GATEWAY_READY":  self._handle_gateway_ready(msg)
+        elif t == "GATEWAY_STATUS": self._handle_gateway_status(msg)
+        elif t == "CMD_ACK":        self._handle_cmd_ack(msg)
         else:
             log.debug("Unknown type: %s", t)
 
@@ -744,6 +969,11 @@ class Bridge:
         log.info("Opening %s @ %d baud", self.args.port, self.args.baud)
         ser = serial.Serial(self.args.port, self.args.baud, timeout=1)
         self._serial = ser
+        try:
+            ser.reset_input_buffer()
+            ser.reset_output_buffer()
+        except Exception as e:
+            log.debug("Serial buffer reset skipped: %s", e)
         # Some USB-CDC boards do not auto-reset reliably on open.
         # Force a short DTR pulse so the gateway always reboots and sends GATEWAY_READY.
         try:
@@ -753,9 +983,8 @@ class Bridge:
             log.debug("Serial DTR pulse applied")
         except Exception as e:
             log.debug("DTR pulse skipped: %s", e)
-        self._mark_gateway_seen()
         log.info("Waiting 3s for gateway boot...")
-        time.sleep(3)
+        self._drain_startup_serial(ser, 3.0)
 
         log.info("Bridge running. Ctrl+C to stop.")
         last_timeout_check = time.time()
@@ -763,7 +992,7 @@ class Bridge:
         try:
             while True:
                 try:
-                    line = ser.readline().decode(errors="replace").strip()
+                    line = self._read_serial_line(ser)
                 except serial.SerialException as e:
                     log.error("Serial error: %s", e)
                     self._mark_gateway_offline("serial error")
