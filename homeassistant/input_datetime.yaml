@@ -1,0 +1,13 @@
+# Aguada — Datas e horas para registro de laudos e eventos
+
+aguada_laudo_data_coleta:
+  name: Aguada — Data/hora da coleta
+  icon: mdi:calendar-clock
+  has_date: true
+  has_time: true
+
+aguada_laudo_data_validade:
+  name: Aguada — Data de validade do laudo
+  icon: mdi:calendar-check
+  has_date: true
+  has_time: false

@@ -1,0 +1,219 @@
+# Aguada — Ajustes e contexto quantitativo manual
+
+aguada_operacao_ajuste_volume_l:
+  name: Aguada — Ajuste manual de volume
+  icon: mdi:water-plus
+  min: -500000
+  max: 500000
+  step: 100
+  mode: box
+  unit_of_measurement: L
+
+# ── Hidrômetros — Leituras anterior / atual (m³ acumulado) ─────────────────
+
+aguada_hidro_if_anterior:
+  name: HID-IF — Leitura anterior (m³)
+  icon: mdi:counter
+  min: 0
+  max: 9999999
+  step: 0.01
+  mode: box
+  unit_of_measurement: "m³"
+
+aguada_hidro_if_atual:
+  name: HID-IF — Leitura atual (m³)
+  icon: mdi:counter
+  min: 0
+  max: 9999999
+  step: 0.01
+  mode: box
+  unit_of_measurement: "m³"
+
+aguada_hidro_praia_anterior:
+  name: HID-PRAIA — Leitura anterior (m³)
+  icon: mdi:counter
+  min: 0
+  max: 9999999
+  step: 0.01
+  mode: box
+  unit_of_measurement: "m³"
+
+aguada_hidro_praia_atual:
+  name: HID-PRAIA — Leitura atual (m³)
+  icon: mdi:counter
+  min: 0
+  max: 9999999
+  step: 0.01
+  mode: box
+  unit_of_measurement: "m³"
+
+aguada_hidro_av_anterior:
+  name: HID-AV — Leitura anterior (m³)
+  icon: mdi:counter
+  min: 0
+  max: 9999999
+  step: 0.01
+  mode: box
+  unit_of_measurement: "m³"
+
+aguada_hidro_av_atual:
+  name: HID-AV — Leitura atual (m³)
+  icon: mdi:counter
+  min: 0
+  max: 9999999
+  step: 0.01
+  mode: box
+  unit_of_measurement: "m³"
+
+aguada_hidro_avaz_anterior:
+  name: HID-AV|AZ — Leitura anterior (m³)
+  icon: mdi:counter
+  min: 0
+  max: 9999999
+  step: 0.01
+  mode: box
+  unit_of_measurement: "m³"
+
+aguada_hidro_avaz_atual:
+  name: HID-AV|AZ — Leitura atual (m³)
+  icon: mdi:counter
+  min: 0
+  max: 9999999
+  step: 0.01
+  mode: box
+  unit_of_measurement: "m³"
+
+# ── Laudos de Qualidade — Parâmetros analíticos ────────────────────────────
+
+aguada_laudo_ph:
+  name: Laudo — pH
+  icon: mdi:ph
+  min: 0
+  max: 14
+  step: 0.01
+  mode: box
+  unit_of_measurement: ""
+
+aguada_laudo_cloro:
+  name: Laudo — Cloro residual (mg/L)
+  icon: mdi:flask
+  min: 0
+  max: 10
+  step: 0.01
+  mode: box
+  unit_of_measurement: "mg/L"
+
+aguada_laudo_turbidez:
+  name: Laudo — Turbidez (uT)
+  icon: mdi:water-opacity
+  min: 0
+  max: 100
+  step: 0.1
+  mode: box
+  unit_of_measurement: "uT"
+
+aguada_laudo_coliformes:
+  name: Laudo — Coliformes totais (UFC/100mL)
+  icon: mdi:bacteria
+  min: 0
+  max: 9999
+  step: 1
+  mode: box
+  unit_of_measurement: "UFC/100mL"
+
+# ── CBIF — Volumes manuais (sem sensor) ───────────────────────────────────────
+# EL insere estes valores diariamente (~06:00) durante a inspeção
+
+aguada_cbif1_volume_manual:
+  name: CBIF1 — Volume atual (L)
+  icon: mdi:water
+  min: 0
+  max: 40000
+  step: 100
+  mode: box
+  unit_of_measurement: "L"
+
+aguada_cbif2_volume_manual:
+  name: CBIF2 — Volume atual (L)
+  icon: mdi:water
+  min: 0
+  max: 40000
+  step: 100
+  mode: box
+  unit_of_measurement: "L"
+
+# Valores anteriores (armazenados pela automação ao gerar o relatório)
+aguada_cbif1_volume_anterior:
+  name: CBIF1 — Volume anterior (L)
+  icon: mdi:history
+  min: 0
+  max: 40000
+  step: 100
+  mode: box
+  unit_of_measurement: "L"
+
+aguada_cbif2_volume_anterior:
+  name: CBIF2 — Volume anterior (L)
+  icon: mdi:history
+  min: 0
+  max: 40000
+  step: 100
+  mode: box
+  unit_of_measurement: "L"
+
+# ── Relatório Diário — Volumes anteriores (armazenados ao gerar relatório) ────
+# Usados para calcular delta = hoje − ontem na tabela do relatório
+
+aguada_relatorio_con_anterior:
+  name: Relatório — CON volume anterior (L)
+  icon: mdi:history
+  min: 0
+  max: 80000
+  step: 1
+  mode: box
+  unit_of_measurement: "L"
+
+aguada_relatorio_cav_anterior:
+  name: Relatório — CAV volume anterior (L)
+  icon: mdi:history
+  min: 0
+  max: 80000
+  step: 1
+  mode: box
+  unit_of_measurement: "L"
+
+aguada_relatorio_cb31_anterior:
+  name: Relatório — CB31 volume anterior (L)
+  icon: mdi:history
+  min: 0
+  max: 40000
+  step: 1
+  mode: box
+  unit_of_measurement: "L"
+
+aguada_relatorio_cb32_anterior:
+  name: Relatório — CB32 volume anterior (L)
+  icon: mdi:history
+  min: 0
+  max: 40000
+  step: 1
+  mode: box
+  unit_of_measurement: "L"
+
+aguada_relatorio_cie1_anterior:
+  name: Relatório — CIE1 volume anterior (L)
+  icon: mdi:history
+  min: 0
+  max: 245000
+  step: 1
+  mode: box
+  unit_of_measurement: "L"
+
+aguada_relatorio_cie2_anterior:
+  name: Relatório — CIE2 volume anterior (L)
+  icon: mdi:history
+  min: 0
+  max: 245000
+  step: 1
+  mode: box
+  unit_of_measurement: "L"

@@ -246,3 +246,118 @@
   max_age:
     days: 7
   sampling_size: 2500
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BLOCO 4: SALDO LÍQUIDO (change) — Base para balanço hídrico operacional
+# Diferença entre a amostra mais nova e a mais antiga da janela.
+# Ajuda a separar amplitude diária (max-min) de variação líquida real.
+# Unidade: L (positivo = ganhou volume, negativo = perdeu volume)
+# ─────────────────────────────────────────────────────────────────────────────
+
+- platform: statistics
+  name: "Aguada CON Saldo 12h"
+  unique_id: aguada_con_saldo_12h
+  entity_id: sensor.aguada_con_volume
+  state_characteristic: change
+  max_age:
+    hours: 12
+  sampling_size: 180
+
+- platform: statistics
+  name: "Aguada CON Saldo 24h"
+  unique_id: aguada_con_saldo_24h
+  entity_id: sensor.aguada_con_volume
+  state_characteristic: change
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "Aguada CAV Saldo 12h"
+  unique_id: aguada_cav_saldo_12h
+  entity_id: sensor.aguada_cav_volume
+  state_characteristic: change
+  max_age:
+    hours: 12
+  sampling_size: 180
+
+- platform: statistics
+  name: "Aguada CAV Saldo 24h"
+  unique_id: aguada_cav_saldo_24h
+  entity_id: sensor.aguada_cav_volume
+  state_characteristic: change
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "Aguada CB31 Saldo 12h"
+  unique_id: aguada_cb31_saldo_12h
+  entity_id: sensor.aguada_cb31_volume
+  state_characteristic: change
+  max_age:
+    hours: 12
+  sampling_size: 180
+
+- platform: statistics
+  name: "Aguada CB31 Saldo 24h"
+  unique_id: aguada_cb31_saldo_24h
+  entity_id: sensor.aguada_cb31_volume
+  state_characteristic: change
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "Aguada CB32 Saldo 12h"
+  unique_id: aguada_cb32_saldo_12h
+  entity_id: sensor.aguada_cb32_volume
+  state_characteristic: change
+  max_age:
+    hours: 12
+  sampling_size: 180
+
+- platform: statistics
+  name: "Aguada CB32 Saldo 24h"
+  unique_id: aguada_cb32_saldo_24h
+  entity_id: sensor.aguada_cb32_volume
+  state_characteristic: change
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "Aguada CIE1 Saldo 12h"
+  unique_id: aguada_cie1_saldo_12h
+  entity_id: sensor.aguada_cie1_volume
+  state_characteristic: change
+  max_age:
+    hours: 12
+  sampling_size: 180
+
+- platform: statistics
+  name: "Aguada CIE1 Saldo 24h"
+  unique_id: aguada_cie1_saldo_24h
+  entity_id: sensor.aguada_cie1_volume
+  state_characteristic: change
+  max_age:
+    hours: 24
+  sampling_size: 300
+
+- platform: statistics
+  name: "Aguada CIE2 Saldo 12h"
+  unique_id: aguada_cie2_saldo_12h
+  entity_id: sensor.aguada_cie2_volume
+  state_characteristic: change
+  max_age:
+    hours: 12
+  sampling_size: 180
+
+- platform: statistics
+  name: "Aguada CIE2 Saldo 24h"
+  unique_id: aguada_cie2_saldo_24h
+  entity_id: sensor.aguada_cie2_volume
+  state_characteristic: change
+  max_age:
+    hours: 24
+  sampling_size: 300

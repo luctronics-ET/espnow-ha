@@ -571,3 +571,294 @@
           • Variação total 24h: {{ states('sensor.aguada_consumo_total_24h') }} m³
           • Vazamentos ativos: {% if is_state('binary_sensor.aguada_alarme_vazamento', 'on') %}⚠️ SIM{% else %}✅ Nenhum{% endif %}
 
+# ── CBIF — Nível baixo / crítico ─────────────────────────────────────────────
+- id: aguada_cbif_nivel_baixo
+  alias: "Aguada CBIF: nível baixo (< 20%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_cbif_pct
+      below: 20
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cbif_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cbif_baixo
+        title: "⚠️ CBIF — Nível Baixo"
+        message: >
+          Casa de Bombas IF em {{ states('sensor.aguada_cbif_pct') }}%
+          ({{ states('sensor.aguada_cbif_volume') }} L).
+
+- id: aguada_cbif_nivel_critico
+  alias: "Aguada CBIF: nível crítico (< 10%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_cbif_pct
+      below: 10
+  condition:
+    - condition: template
+      value_template: "{{ states('sensor.aguada_cbif_pct') not in ['unknown','unavailable'] }}"
+  action:
+    - service: input_boolean.turn_on
+      entity_id: input_boolean.aguada_cbif_alerta_bomba_seca
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cbif_critico
+        title: "🚨 CBIF — Nível CRÍTICO / Risco Bomba Seca"
+        message: >
+          Casa de Bombas IF em {{ states('sensor.aguada_cbif_pct') }}%
+          ({{ states('sensor.aguada_cbif_volume') }} L).
+          Verificar bomba! Risco de operação a seco (NBR 5626).
+
+- id: aguada_cbif_nivel_ok
+  alias: "Aguada CBIF: nível normalizado (> 20%)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.aguada_cbif_pct
+      above: 20
+  action:
+    - service: input_boolean.turn_off
+      entity_id: input_boolean.aguada_cbif_alerta_bomba_seca
+    - service: persistent_notification.dismiss
+      data:
+        notification_id: aguada_cbif_critico
+    - service: persistent_notification.dismiss
+      data:
+        notification_id: aguada_cbif_baixo
+
+# ── CBIF — Registrar estado operacional (via botão) ───────────────────────────
+- id: aguada_cbif_registrar_estado
+  alias: "Aguada CBIF: registrar estado no logbook"
+  trigger:
+    - platform: state
+      entity_id: input_button.aguada_cbif_registrar_estado
+  action:
+    - service: logbook.log
+      data:
+        name: "CBIF — Registro Operacional"
+        message: >
+          Modo: {{ states('input_select.aguada_cbif_modo_operacao') }} |
+          Bomba 1: {{ states('input_select.aguada_cbif_bomba1_estado') }} |
+          Bomba 2: {{ states('input_select.aguada_cbif_bomba2_estado') }} |
+          Válvula entrada: {{ states('input_select.aguada_cbif_valvula_entrada') }} |
+          Válvula saída: {{ states('input_select.aguada_cbif_valvula_saida') }} |
+          Obs: {{ states('input_text.aguada_cbif_observacao') }}
+        entity_id: input_button.aguada_cbif_registrar_estado
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_cbif_estado_registrado
+        title: "✅ CBIF — Estado Registrado"
+        message: >
+          {{ now().strftime('%d/%m/%Y %H:%M') }} —
+          B1: {{ states('input_select.aguada_cbif_bomba1_estado') }} |
+          B2: {{ states('input_select.aguada_cbif_bomba2_estado') }} |
+          V.Ent: {{ states('input_select.aguada_cbif_valvula_entrada') }} |
+          V.Saí: {{ states('input_select.aguada_cbif_valvula_saida') }}
+
+# ── Hidrômetros — Registrar leituras (via botão) ──────────────────────────────
+- id: aguada_hidrometro_registrar
+  alias: "Aguada: registrar leitura de hidrômetros"
+  trigger:
+    - platform: state
+      entity_id: input_button.aguada_hidrometro_registrar
+  action:
+    - service: logbook.log
+      data:
+        name: "Hidrômetros — Leitura Registrada"
+        message: >
+          HID-IF: ant={{ states('input_number.aguada_hidro_if_anterior') }} | atu={{ states('input_number.aguada_hidro_if_atual') }} | Δ={{ states('sensor.aguada_hidro_if_delta') }} m³ | St: {{ states('input_select.aguada_hidro_if_status') }}
+          HID-PRAIA: ant={{ states('input_number.aguada_hidro_praia_anterior') }} | atu={{ states('input_number.aguada_hidro_praia_atual') }} | Δ={{ states('sensor.aguada_hidro_praia_delta') }} m³ | St: {{ states('input_select.aguada_hidro_praia_status') }}
+          HID-AV: ant={{ states('input_number.aguada_hidro_av_anterior') }} | atu={{ states('input_number.aguada_hidro_av_atual') }} | Δ={{ states('sensor.aguada_hidro_av_delta') }} m³ | St: {{ states('input_select.aguada_hidro_av_status') }}
+          HID-AV|AZ: ant={{ states('input_number.aguada_hidro_avaz_anterior') }} | atu={{ states('input_number.aguada_hidro_avaz_atual') }} | Δ={{ states('sensor.aguada_hidro_avaz_delta') }} m³ | St: {{ states('input_select.aguada_hidro_avaz_status') }}
+          AZ estimado: {{ states('sensor.aguada_hidro_az_estimado') }} m³
+          Obs: {{ states('input_text.aguada_hidro_observacao') }}
+        entity_id: input_button.aguada_hidrometro_registrar
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: >
+                {{ not is_state('binary_sensor.aguada_hidro_if_valido', 'on')
+                   or not is_state('binary_sensor.aguada_hidro_praia_valido', 'on')
+                   or not is_state('binary_sensor.aguada_hidro_av_valido', 'on')
+                   or not is_state('binary_sensor.aguada_hidro_avaz_valido', 'on') }}
+          sequence:
+            - service: persistent_notification.create
+              data:
+                notification_id: aguada_hidro_invalido
+                title: "⚠️ Hidrômetros — Leitura Inválida"
+                message: >
+                  Atenção: uma ou mais leituras têm valor atual menor que o anterior.
+                  Verifique os campos antes de confirmar.
+      default:
+        - service: persistent_notification.create
+          data:
+            notification_id: aguada_hidro_registrado
+            title: "✅ Hidrômetros — Leitura Registrada"
+            message: >
+              {{ now().strftime('%d/%m/%Y %H:%M') }} — Leituras salvas no logbook.
+              HID-IF Δ={{ states('sensor.aguada_hidro_if_delta') }} m³ |
+              HID-PRAIA Δ={{ states('sensor.aguada_hidro_praia_delta') }} m³ |
+              HID-AV Δ={{ states('sensor.aguada_hidro_av_delta') }} m³ |
+              AZ est.={{ states('sensor.aguada_hidro_az_estimado') }} m³
+
+# ── Laudos — Registrar laudo de qualidade (via botão) ─────────────────────────
+- id: aguada_laudo_registrar
+  alias: "Aguada: registrar laudo de qualidade"
+  trigger:
+    - platform: state
+      entity_id: input_button.aguada_laudo_registrar
+  action:
+    - service: logbook.log
+      data:
+        name: "Laudo de Qualidade da Água"
+        message: >
+          Ponto: {{ states('input_select.aguada_laudo_ponto_coleta') }} |
+          Data: {{ states('input_datetime.aguada_laudo_data_coleta') }} |
+          pH={{ states('input_number.aguada_laudo_ph') }} |
+          Cl={{ states('input_number.aguada_laudo_cloro') }} mg/L |
+          Turb={{ states('input_number.aguada_laudo_turbidez') }} uT |
+          Col={{ states('input_number.aguada_laudo_coliformes') }} UFC/100mL |
+          Conformidade: {{ states('input_select.aguada_laudo_conformidade') }} |
+          Lab: {{ states('input_text.aguada_laudo_laboratorio') }} |
+          Resp: {{ states('input_text.aguada_laudo_responsavel') }} |
+          Obs: {{ states('input_text.aguada_laudo_observacao') }}
+        entity_id: input_button.aguada_laudo_registrar
+    - choose:
+        - conditions:
+            - condition: state
+              entity: input_select.aguada_laudo_conformidade
+              state: "Não conforme"
+          sequence:
+            - service: persistent_notification.create
+              data:
+                notification_id: aguada_laudo_nao_conforme
+                title: "🚨 Laudo NÃO CONFORME — Portaria 2.914/2011"
+                message: >
+                  Ponto: {{ states('input_select.aguada_laudo_ponto_coleta') }}
+                  Data coleta: {{ states('input_datetime.aguada_laudo_data_coleta') }}
+                  pH: {{ states('input_number.aguada_laudo_ph') }} |
+                  Cloro: {{ states('input_number.aguada_laudo_cloro') }} mg/L |
+                  Turbidez: {{ states('input_number.aguada_laudo_turbidez') }} uT |
+                  Coliformes: {{ states('input_number.aguada_laudo_coliformes') }} UFC/100mL
+                  Lab: {{ states('input_text.aguada_laudo_laboratorio') }}
+                  Tomar providências imediatas conforme protocolo sanitário.
+      default:
+        - service: persistent_notification.create
+          data:
+            notification_id: aguada_laudo_registrado
+            title: "✅ Laudo Registrado"
+            message: >
+              {{ now().strftime('%d/%m/%Y %H:%M') }} — Laudo registrado no logbook.
+              {{ states('input_select.aguada_laudo_ponto_coleta') }} —
+              {{ states('input_select.aguada_laudo_conformidade') }}
+
+# ── Relatório Diário — Gerar e salvar (via botão) ─────────────────────────────
+- id: aguada_relatorio_gerar
+  alias: "Aguada: Gerar relatório diário"
+  trigger:
+    - platform: state
+      entity_id: input_button.aguada_relatorio_gerar
+  action:
+    # 1. Salvar resumo compacto no logbook (histórico pesquisável)
+    - service: logbook.log
+      data:
+        name: "Relatório Diário Aguada"
+        message: >
+          {{ now().strftime('%d/%m/%Y %H:%M') }} | Inspetor: {{ states('input_text.aguada_relatorio_inspetor') | default('—', true) }} |
+          CON: {{ (states('input_number.aguada_relatorio_con_anterior')|float(0)/1000)|round(1) }}→{{ (states('sensor.aguada_con_volume')|float(0)/1000)|round(1) }}T |
+          CAV: {{ (states('input_number.aguada_relatorio_cav_anterior')|float(0)/1000)|round(1) }}→{{ (states('sensor.aguada_cav_volume')|float(0)/1000)|round(1) }}T |
+          CB31: {{ (states('input_number.aguada_relatorio_cb31_anterior')|float(0)/1000)|round(1) }}→{{ (states('sensor.aguada_cb31_volume')|float(0)/1000)|round(1) }}T |
+          CB32: {{ (states('input_number.aguada_relatorio_cb32_anterior')|float(0)/1000)|round(1) }}→{{ (states('sensor.aguada_cb32_volume')|float(0)/1000)|round(1) }}T |
+          CIE1: {{ (states('input_number.aguada_relatorio_cie1_anterior')|float(0)/1000)|round(1) }}→{{ (states('sensor.aguada_cie1_volume')|float(0)/1000)|round(1) }}T |
+          CIE2: {{ (states('input_number.aguada_relatorio_cie2_anterior')|float(0)/1000)|round(1) }}→{{ (states('sensor.aguada_cie2_volume')|float(0)/1000)|round(1) }}T |
+          CBIF1: {{ (states('input_number.aguada_cbif1_volume_anterior')|float(0)/1000)|round(1) }}→{{ (states('input_number.aguada_cbif1_volume_manual')|float(0)/1000)|round(1) }}T |
+          CBIF2: {{ (states('input_number.aguada_cbif2_volume_anterior')|float(0)/1000)|round(1) }}→{{ (states('input_number.aguada_cbif2_volume_manual')|float(0)/1000)|round(1) }}T |
+          Obs: {{ states('input_text.aguada_relatorio_observacao_geral') | default('—', true) }}
+        entity_id: input_button.aguada_relatorio_gerar
+    # 2. Criar notificação com relatório completo formatado (salvar/printar pelo celular)
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_relatorio_diario_gerado
+        title: >-
+          📋 Relatório Diário — {{ now().strftime('%d/%m/%Y') }}
+        message: |
+          RELATÓRIO DIÁRIO — SISTEMA DE ABASTECIMENTO
+          CMASM / Ilha do Engenho
+          Data : {{ now().strftime('%d/%m/%Y') }}   Hora: {{ now().strftime('%H:%M') }}
+          Inspetor: {{ states('input_text.aguada_relatorio_inspetor') | default('—', true) }}
+
+          ── RESERVATÓRIOS — VOLUME (Toneladas ≈ m³) ──────────────
+          Local               | Anterior (T) | Atual (T)    | Diferença
+          ─────────────────────────────────────────────────────────
+          Castelo de Consumo  | {{ '%12.1f' % (states('input_number.aguada_relatorio_con_anterior')|float(0)/1000) }} | {{ '%12.1f' % (states('sensor.aguada_con_volume')|float(0)/1000) }} | {{ '%+13.1f' % ((states('sensor.aguada_con_volume')|float(0) - states('input_number.aguada_relatorio_con_anterior')|float(0))/1000) }}
+          Castelo de Incêndio | {{ '%12.1f' % (states('input_number.aguada_relatorio_cav_anterior')|float(0)/1000) }} | {{ '%12.1f' % (states('sensor.aguada_cav_volume')|float(0)/1000) }} | {{ '%+13.1f' % ((states('sensor.aguada_cav_volume')|float(0) - states('input_number.aguada_relatorio_cav_anterior')|float(0))/1000) }}
+          Casa de Bombas N3.1 | {{ '%12.1f' % (states('input_number.aguada_relatorio_cb31_anterior')|float(0)/1000) }} | {{ '%12.1f' % (states('sensor.aguada_cb31_volume')|float(0)/1000) }} | {{ '%+13.1f' % ((states('sensor.aguada_cb31_volume')|float(0) - states('input_number.aguada_relatorio_cb31_anterior')|float(0))/1000) }}
+          Casa de Bombas N3.2 | {{ '%12.1f' % (states('input_number.aguada_relatorio_cb32_anterior')|float(0)/1000) }} | {{ '%12.1f' % (states('sensor.aguada_cb32_volume')|float(0)/1000) }} | {{ '%+13.1f' % ((states('sensor.aguada_cb32_volume')|float(0) - states('input_number.aguada_relatorio_cb32_anterior')|float(0))/1000) }}
+          Cisterna IE 1       | {{ '%12.1f' % (states('input_number.aguada_relatorio_cie1_anterior')|float(0)/1000) }} | {{ '%12.1f' % (states('sensor.aguada_cie1_volume')|float(0)/1000) }} | {{ '%+13.1f' % ((states('sensor.aguada_cie1_volume')|float(0) - states('input_number.aguada_relatorio_cie1_anterior')|float(0))/1000) }}
+          Cisterna IE 2       | {{ '%12.1f' % (states('input_number.aguada_relatorio_cie2_anterior')|float(0)/1000) }} | {{ '%12.1f' % (states('sensor.aguada_cie2_volume')|float(0)/1000) }} | {{ '%+13.1f' % ((states('sensor.aguada_cie2_volume')|float(0) - states('input_number.aguada_relatorio_cie2_anterior')|float(0))/1000) }}
+          Casa de Bombas IF 1 | {{ '%12.1f' % (states('input_number.aguada_cbif1_volume_anterior')|float(0)/1000) }} | {{ '%12.1f' % (states('input_number.aguada_cbif1_volume_manual')|float(0)/1000) }} | {{ '%+13.1f' % ((states('input_number.aguada_cbif1_volume_manual')|float(0) - states('input_number.aguada_cbif1_volume_anterior')|float(0))/1000) }}
+          Casa de Bombas IF 2 | {{ '%12.1f' % (states('input_number.aguada_cbif2_volume_anterior')|float(0)/1000) }} | {{ '%12.1f' % (states('input_number.aguada_cbif2_volume_manual')|float(0)/1000) }} | {{ '%+13.1f' % ((states('input_number.aguada_cbif2_volume_manual')|float(0) - states('input_number.aguada_cbif2_volume_anterior')|float(0))/1000) }}
+          ─────────────────────────────────────────────────────────
+          {% set ta = states('input_number.aguada_relatorio_con_anterior')|float(0) + states('input_number.aguada_relatorio_cav_anterior')|float(0) + states('input_number.aguada_relatorio_cb31_anterior')|float(0) + states('input_number.aguada_relatorio_cb32_anterior')|float(0) + states('input_number.aguada_relatorio_cie1_anterior')|float(0) + states('input_number.aguada_relatorio_cie2_anterior')|float(0) + states('input_number.aguada_cbif1_volume_anterior')|float(0) + states('input_number.aguada_cbif2_volume_anterior')|float(0) %}{% set tu = states('sensor.aguada_con_volume')|float(0) + states('sensor.aguada_cav_volume')|float(0) + states('sensor.aguada_cb31_volume')|float(0) + states('sensor.aguada_cb32_volume')|float(0) + states('sensor.aguada_cie1_volume')|float(0) + states('sensor.aguada_cie2_volume')|float(0) + states('input_number.aguada_cbif1_volume_manual')|float(0) + states('input_number.aguada_cbif2_volume_manual')|float(0) %}
+          TOTAL               | {{ '%12.1f' % (ta/1000) }} | {{ '%12.1f' % (tu/1000) }} | {{ '%+13.1f' % ((tu-ta)/1000) }}
+
+          ── HIDRÔMETROS (m³ acumulado) ───────────────────────────
+          Hidrômetro          | Anterior     | Atual        | Diferença
+          ─────────────────────────────────────────────────────────
+          HID-IF              | {{ '%12.2f' % (states('input_number.aguada_hidro_if_anterior')|float(0)) }} | {{ '%12.2f' % (states('input_number.aguada_hidro_if_atual')|float(0)) }} | {{ '%+13.2f' % (states('input_number.aguada_hidro_if_atual')|float(0) - states('input_number.aguada_hidro_if_anterior')|float(0)) }}
+          HID-PRAIA           | {{ '%12.2f' % (states('input_number.aguada_hidro_praia_anterior')|float(0)) }} | {{ '%12.2f' % (states('input_number.aguada_hidro_praia_atual')|float(0)) }} | {{ '%+13.2f' % (states('input_number.aguada_hidro_praia_atual')|float(0) - states('input_number.aguada_hidro_praia_anterior')|float(0)) }}
+          HID-AV              | {{ '%12.2f' % (states('input_number.aguada_hidro_av_anterior')|float(0)) }} | {{ '%12.2f' % (states('input_number.aguada_hidro_av_atual')|float(0)) }} | {{ '%+13.2f' % (states('input_number.aguada_hidro_av_atual')|float(0) - states('input_number.aguada_hidro_av_anterior')|float(0)) }}
+          HID-AV|AZ           | {{ '%12.2f' % (states('input_number.aguada_hidro_avaz_anterior')|float(0)) }} | {{ '%12.2f' % (states('input_number.aguada_hidro_avaz_atual')|float(0)) }} | {{ '%+13.2f' % (states('input_number.aguada_hidro_avaz_atual')|float(0) - states('input_number.aguada_hidro_avaz_anterior')|float(0)) }}
+
+          ── ESTADO OPERACIONAL — CBIF ─────────────────────────────
+          Bomba 1: {{ states('input_select.aguada_cbif_bomba1_estado') }} | Bomba 2: {{ states('input_select.aguada_cbif_bomba2_estado') }}
+          Válvula Entrada: {{ states('input_select.aguada_cbif_valvula_entrada') }} | Saída: {{ states('input_select.aguada_cbif_valvula_saida') }}
+          Obs. CBIF: {{ states('input_text.aguada_relatorio_observacao_cbif') | default('(nenhuma)', true) }}
+
+          ── OBSERVAÇÕES GERAIS / OCORRÊNCIAS ─────────────────────
+          {{ states('input_text.aguada_relatorio_observacao_geral') | default('(nenhuma)', true) }}
+
+          ─────────────────────────────────────────────────────────
+          Gerado em: {{ now().strftime('%d/%m/%Y %H:%M') }} — Sistema Aguada / HA
+    # 3. Persistir valores atuais como "anterior" para o delta do próximo relatório
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.aguada_relatorio_con_anterior
+      data:
+        value: "{{ states('sensor.aguada_con_volume') | float(0) | round(0) }}"
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.aguada_relatorio_cav_anterior
+      data:
+        value: "{{ states('sensor.aguada_cav_volume') | float(0) | round(0) }}"
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.aguada_relatorio_cb31_anterior
+      data:
+        value: "{{ states('sensor.aguada_cb31_volume') | float(0) | round(0) }}"
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.aguada_relatorio_cb32_anterior
+      data:
+        value: "{{ states('sensor.aguada_cb32_volume') | float(0) | round(0) }}"
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.aguada_relatorio_cie1_anterior
+      data:
+        value: "{{ states('sensor.aguada_cie1_volume') | float(0) | round(0) }}"
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.aguada_relatorio_cie2_anterior
+      data:
+        value: "{{ states('sensor.aguada_cie2_volume') | float(0) | round(0) }}"
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.aguada_cbif1_volume_anterior
+      data:
+        value: "{{ states('input_number.aguada_cbif1_volume_manual') | float(0) | round(0) }}"
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.aguada_cbif2_volume_anterior
+      data:
+        value: "{{ states('input_number.aguada_cbif2_volume_manual') | float(0) | round(0) }}"

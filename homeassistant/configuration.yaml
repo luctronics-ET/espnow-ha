@@ -31,6 +31,14 @@ sensor: !include statistics_sensors.yaml
 # Template sensors e binary_sensors (agregados, vazamento, alarmes)
 template: !include template_sensors.yaml
 
+# Helpers de operação manual / contexto do operador
+input_boolean: !include input_boolean.yaml
+input_select: !include input_select.yaml
+input_text: !include input_text.yaml
+input_number: !include input_number.yaml
+input_datetime: !include input_datetime.yaml
+input_button: !include input_button.yaml
+
 # Automações Aguada
 automation: !include automations.yaml
 
@@ -41,6 +49,16 @@ recorder:
     entity_globs:
       - sensor.aguada_*
       - binary_sensor.aguada_*
+      - input_number.aguada_hidro_*
+      - input_number.aguada_laudo_*
+      - input_number.aguada_cbif*
+      - input_number.aguada_relatorio_*
+      - input_select.aguada_cbif_*
+      - input_select.aguada_hidro_*
+      - input_select.aguada_laudo_*
+      - input_boolean.aguada_cbif_*
+      - input_datetime.aguada_laudo_*
+      - input_text.aguada_relatorio_*
 
 # ---------------------------------------------------------------------------
 # DASHBOARD (escolha UMA opção)

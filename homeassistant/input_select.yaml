@@ -1,0 +1,148 @@
+# Aguada — Helpers de seleção para operação
+
+aguada_operacao_reservatorio:
+  name: Aguada — Reservatório / setor
+  icon: mdi:water
+  options:
+    - Sistema
+    - CON
+    - CAV
+    - CB31
+    - CB32
+    - CB03
+    - CBIF1
+    - CBIF2
+    - CBIF
+    - CIE1
+    - CIE2
+    - Cisternas
+
+aguada_operacao_tipo:
+  name: Aguada — Tipo de evento operacional
+  icon: mdi:clipboard-list
+  options:
+    - Nenhum
+    - Abastecimento externo
+    - Transferência interna
+    - Limpeza
+    - Manutenção
+    - Teste operacional
+    - Inspeção de vazamento
+    - Vazamento confirmado
+    - Observação geral
+
+# ── CBIF — Estado de bombas e válvulas ────────────────────────────────────
+
+aguada_cbif_modo_operacao:
+  name: CBIF — Modo de operação
+  icon: mdi:cog-transfer-outline
+  options:
+    - Automático
+    - Manual
+  initial: Automático
+
+aguada_cbif_bomba1_estado:
+  name: CBIF — Bomba 1 estado
+  icon: mdi:pump
+  options:
+    - Desligada
+    - Ligada
+    - Falha
+    - Manutenção
+  initial: Desligada
+
+aguada_cbif_bomba2_estado:
+  name: CBIF — Bomba 2 estado
+  icon: mdi:pump
+  options:
+    - Desligada
+    - Ligada
+    - Falha
+    - Manutenção
+  initial: Desligada
+
+aguada_cbif_valvula_entrada:
+  name: CBIF — Válvula de entrada
+  icon: mdi:valve
+  options:
+    - Aberta
+    - Fechada
+    - Parcial
+    - Falha
+  initial: Aberta
+
+aguada_cbif_valvula_saida:
+  name: CBIF — Válvula de saída
+  icon: mdi:valve
+  options:
+    - Aberta
+    - Fechada
+    - Parcial
+    - Falha
+  initial: Aberta
+
+# ── Hidrômetros — Status de cada medidor ─────────────────────────────────
+
+aguada_hidro_if_status:
+  name: HID-IF — Status
+  icon: mdi:alert-circle-outline
+  options:
+    - Normal
+    - Discrepância
+    - Suspeita de vazamento
+    - Em manutenção
+  initial: Normal
+
+aguada_hidro_praia_status:
+  name: HID-PRAIA — Status
+  icon: mdi:alert-circle-outline
+  options:
+    - Normal
+    - Discrepância
+    - Suspeita de vazamento
+    - Em manutenção
+  initial: Normal
+
+aguada_hidro_av_status:
+  name: HID-AV — Status
+  icon: mdi:alert-circle-outline
+  options:
+    - Normal
+    - Discrepância
+    - Suspeita de vazamento
+    - Em manutenção
+  initial: Normal
+
+aguada_hidro_avaz_status:
+  name: HID-AV|AZ — Status
+  icon: mdi:alert-circle-outline
+  options:
+    - Normal
+    - Discrepância
+    - Suspeita de vazamento
+    - Em manutenção
+  initial: Normal
+
+# ── Laudos de Qualidade ───────────────────────────────────────────────────
+
+aguada_laudo_ponto_coleta:
+  name: Laudo — Ponto de coleta
+  icon: mdi:map-marker
+  options:
+    - CON — Castelo de Consumo
+    - CAV — Castelo de Incêndio
+    - CB03 — Casa de Bombas N3
+    - CBIF — Casa de Bombas IF
+    - CIE1 — Cisterna 1
+    - CIE2 — Cisterna 2
+    - Rede geral
+    - Torneira do consumidor
+
+aguada_laudo_conformidade:
+  name: Laudo — Conformidade geral (Portaria 2.914/2011)
+  icon: mdi:check-circle-outline
+  options:
+    - Conforme
+    - Não conforme
+    - Em análise
+  initial: Em análise

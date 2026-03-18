@@ -371,6 +371,114 @@ views:
           - mean
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 3: OPERAÇÃO & BALANÇO
+  # Contexto manual do operador + saldo líquido 12h/24h
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: Operação
+    path: operacao
+    icon: mdi:clipboard-pulse-outline
+    badges:
+      - entity: binary_sensor.aguada_contexto_operacional_ativo
+        name: Contexto manual
+      - entity: sensor.aguada_saldo_total_12h
+        name: Saldo 12h
+      - entity: sensor.aguada_saldo_total_24h
+        name: Saldo 24h
+    cards:
+
+      - type: markdown
+        content: >
+          ### 🧭 Operação & Balanço
+
+          Nesta aba, o operador informa contexto manual e acompanha **saldo líquido**,
+          que é diferente da **amplitude diária** (`max - min`).
+
+          - **Saldo 12h / 24h** = variação líquida real na janela
+          - **Consumo 24h** = amplitude diária, útil como indicador auxiliar
+
+      - type: entities
+        title: Contexto Operacional Manual
+        show_header_toggle: false
+        entities:
+          - entity: binary_sensor.aguada_contexto_operacional_ativo
+            name: Contexto manual ativo
+          - entity: sensor.aguada_contexto_operacional
+            name: Resumo do contexto
+          - entity: input_boolean.aguada_operacao_recarga_externa
+            name: Recarga externa em andamento
+          - entity: input_boolean.aguada_operacao_manutencao
+            name: Manutenção em andamento
+          - entity: input_boolean.aguada_operacao_bomba_manual
+            name: Operação manual de bomba
+          - entity: input_boolean.aguada_operacao_inspecao_vazamento
+            name: Inspeção de vazamento
+          - entity: input_select.aguada_operacao_reservatorio
+            name: Reservatório / setor
+          - entity: input_select.aguada_operacao_tipo
+            name: Tipo de evento
+          - entity: input_number.aguada_operacao_ajuste_volume_l
+            name: Ajuste manual de volume (L)
+          - entity: input_text.aguada_operacao_observacao
+            name: Observação do operador
+
+      - type: entities
+        title: Balanço do Sistema
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_saldo_total_12h
+            name: Saldo líquido 12h
+            icon: mdi:scale-balance
+          - entity: sensor.aguada_saldo_total_24h
+            name: Saldo líquido 24h
+            icon: mdi:scale-balance
+          - entity: sensor.aguada_consumo_total_24h
+            name: Amplitude 24h (proxy auxiliar)
+            icon: mdi:water-minus
+          - type: divider
+          - entity: sensor.aguada_castelos_saldo_24h
+            name: Castelos — saldo 24h
+          - entity: sensor.aguada_bombas_saldo_24h
+            name: Bombas N3 — saldo 24h
+          - entity: sensor.aguada_cisternas_saldo_24h
+            name: Cisternas — saldo 24h
+
+      - type: entities
+        title: Saldo por Reservatório
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_con_saldo_12h
+            name: CON — saldo 12h
+          - entity: sensor.aguada_con_saldo_24h
+            name: CON — saldo 24h
+          - entity: sensor.aguada_cav_saldo_12h
+            name: CAV — saldo 12h
+          - entity: sensor.aguada_cav_saldo_24h
+            name: CAV — saldo 24h
+          - entity: sensor.aguada_cb31_saldo_12h
+            name: CB31 — saldo 12h
+          - entity: sensor.aguada_cb31_saldo_24h
+            name: CB31 — saldo 24h
+          - entity: sensor.aguada_cb32_saldo_12h
+            name: CB32 — saldo 12h
+          - entity: sensor.aguada_cb32_saldo_24h
+            name: CB32 — saldo 24h
+          - entity: sensor.aguada_cie1_saldo_12h
+            name: CIE1 — saldo 12h
+          - entity: sensor.aguada_cie1_saldo_24h
+            name: CIE1 — saldo 24h
+          - entity: sensor.aguada_cie2_saldo_12h
+            name: CIE2 — saldo 12h
+          - entity: sensor.aguada_cie2_saldo_24h
+            name: CIE2 — saldo 24h
+
+      - type: history-graph
+        title: Volume Total do Sistema — 48h
+        hours_to_show: 48
+        entities:
+          - entity: sensor.aguada_volume_total
+            name: Volume total (m³)
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # VIEW 3: DETECÇÃO DE VAZAMENTO
   # Status por reservatório, taxa de variação, gráficos de taxa
   # ═══════════════════════════════════════════════════════════════════════════
@@ -1082,3 +1190,745 @@ views:
         entities:
           - entity: sensor.aguada_volume_total_pct
             name: Sistema %
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 9: CBIF — CASA DE BOMBAS IF (CBIF1 / CBIF2)
+  # node_id 0x3456 | 2 sensores | + controle manual de bombas e válvulas
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: CBIF
+    path: cbif
+    icon: mdi:pump
+    badges:
+      - entity: sensor.aguada_cbif_pct
+        name: CBIF %
+      - entity: input_boolean.aguada_cbif_alerta_bomba_seca
+        name: Bomba seca
+    cards:
+
+      - type: markdown
+        content: >
+          ### ⚙️ Casa de Bombas IF — CBIF1 / CBIF2
+
+          Dois reservatórios de **40.000 L cada** (total 80.000 L).
+          **Sem sensor instalado** — volume inserido manualmente pelo eletricista (~06h00).
+
+          > Registre o volume observado abaixo e pressione **Registrar Estado** para salvar.
+          > Para gerar o Relatório Diário, use a aba **Relatório**.
+
+      # ── Gauge CBIF (template sensors calculados a partir da entrada manual) ──
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.aguada_cbif1_pct
+            name: CBIF1 %
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+          - type: gauge
+            entity: sensor.aguada_cbif2_pct
+            name: CBIF2 %
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+          - type: gauge
+            entity: sensor.aguada_cbif_pct
+            name: CBIF Total %
+            min: 0
+            max: 100
+            unit: "%"
+            needle: true
+            severity:
+              green: 40
+              yellow: 20
+              red: 10
+
+      # ── Entrada manual de volume ────────────────────────────────────────────
+      - type: entities
+        title: CBIF1 — Volume observado (40.000 L cap.)
+        show_header_toggle: false
+        entities:
+          - entity: input_number.aguada_cbif1_volume_manual
+            name: Volume atual (L) — inserir manualmente
+          - entity: sensor.aguada_cbif1_volume
+            name: Volume confirmado (L)
+          - entity: sensor.aguada_cbif1_pct
+            name: Volume %
+          - entity: input_number.aguada_cbif1_volume_anterior
+            name: Volume anterior (L) — atualizado pelo relatório
+
+      - type: entities
+        title: CBIF2 — Volume observado (40.000 L cap.)
+        show_header_toggle: false
+        entities:
+          - entity: input_number.aguada_cbif2_volume_manual
+            name: Volume atual (L) — inserir manualmente
+          - entity: sensor.aguada_cbif2_volume
+            name: Volume confirmado (L)
+          - entity: sensor.aguada_cbif2_pct
+            name: Volume %
+          - entity: input_number.aguada_cbif2_volume_anterior
+            name: Volume anterior (L) — atualizado pelo relatório
+
+      - type: entities
+        title: CBIF — Total e Delta Diário
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_cbif_volume
+            name: Volume total (L)
+          - entity: sensor.aguada_cbif_pct
+            name: Volume total %
+          - entity: sensor.aguada_cbif_delta
+            name: Delta desde último relatório (L)
+            icon: mdi:delta
+
+      # ── Estado manual — Bombas e Válvulas ──────────────────────────────────
+      - type: entities
+        title: Estado Operacional Manual — Bombas e Válvulas
+        show_header_toggle: false
+        entities:
+          - entity: input_select.aguada_cbif_modo_operacao
+            name: Modo de operação
+            icon: mdi:cog-transfer-outline
+          - type: divider
+          - entity: input_select.aguada_cbif_bomba1_estado
+            name: Bomba 1 — Estado
+            icon: mdi:pump
+          - entity: input_select.aguada_cbif_bomba2_estado
+            name: Bomba 2 — Estado
+            icon: mdi:pump
+          - type: divider
+          - entity: input_select.aguada_cbif_valvula_entrada
+            name: Válvula de entrada
+            icon: mdi:valve
+          - entity: input_select.aguada_cbif_valvula_saida
+            name: Válvula de saída
+            icon: mdi:valve
+          - type: divider
+          - entity: input_boolean.aguada_cbif_manutencao
+            name: Manutenção em andamento
+            icon: mdi:wrench-cog
+          - entity: input_boolean.aguada_cbif_alerta_bomba_seca
+            name: Alerta bomba seca
+            icon: mdi:alert-circle
+          - type: divider
+          - entity: input_text.aguada_cbif_observacao
+            name: Observação operacional
+            icon: mdi:text-box-outline
+
+      # ── Botão Registrar Estado ─────────────────────────────────────────────
+      - type: button
+        entity: input_button.aguada_cbif_registrar_estado
+        name: Registrar Estado no Logbook
+        icon: mdi:content-save-check-outline
+        tap_action:
+          action: call-service
+          service: input_button.press
+          service_data:
+            entity_id: input_button.aguada_cbif_registrar_estado
+
+      # ── Histórico CBIF ─────────────────────────────────────────────────────
+      - type: history-graph
+        title: CBIF1 / CBIF2 — Volume % — 48h
+        hours_to_show: 48
+        entities:
+          - entity: sensor.aguada_cbif1_pct
+            name: CBIF1 %
+          - entity: sensor.aguada_cbif2_pct
+            name: CBIF2 %
+
+      - type: history-graph
+        title: CBIF1 / CBIF2 — Volume % — 7 dias
+        hours_to_show: 168
+        entities:
+          - entity: sensor.aguada_cbif1_pct
+            name: CBIF1 %
+          - entity: sensor.aguada_cbif2_pct
+            name: CBIF2 %
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 10: RELATÓRIO DIÁRIO
+  # Espelho do relatório de inspeção (~06h00) — EL preenche, valida e gera
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: Relatório
+    path: relatorio
+    icon: mdi:file-chart-outline
+    badges:
+      - entity: input_text.aguada_relatorio_inspetor
+        name: Inspetor
+    cards:
+
+      # ── Cabeçalho / Identificação ──────────────────────────────────────────
+      - type: entities
+        title: "▶ 1. Identificação da Inspeção"
+        show_header_toggle: false
+        entities:
+          - entity: input_text.aguada_relatorio_inspetor
+            name: Nome do inspetor (EL)
+            icon: mdi:account-hard-hat
+
+      # ── Entrada manual CBIF ────────────────────────────────────────────────
+      - type: entities
+        title: "▶ 2. CBIF — Volume Observado (inserir manualmente)"
+        show_header_toggle: false
+        entities:
+          - entity: input_number.aguada_cbif1_volume_manual
+            name: CBIF1 — Volume atual (L)
+            icon: mdi:water
+          - entity: input_number.aguada_cbif2_volume_manual
+            name: CBIF2 — Volume atual (L)
+            icon: mdi:water
+          - entity: sensor.aguada_cbif_pct
+            name: CBIF Total %
+          - entity: sensor.aguada_cbif_delta
+            name: Delta desde último relatório (L)
+            icon: mdi:delta
+          - entity: input_text.aguada_relatorio_observacao_cbif
+            name: Observação CBIF
+
+      # ── Dados automáticos dos sensores ────────────────────────────────────
+      - type: entities
+        title: "▶ 3. Dados Automáticos dos Sensores (verificar)"
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_con_volume
+            name: CON — Volume atual (L)
+          - entity: sensor.aguada_con_pct
+            name: CON — %
+          - type: divider
+          - entity: sensor.aguada_cav_volume
+            name: CAV — Volume atual (L)
+          - entity: sensor.aguada_cav_pct
+            name: CAV — %
+          - type: divider
+          - entity: sensor.aguada_cb03_volume
+            name: CB03 (N3) — Volume total (L)
+          - entity: sensor.aguada_cb03_pct
+            name: CB03 (N3) — %
+          - type: divider
+          - entity: sensor.aguada_cisternas_volume
+            name: Cisternas — Volume total (m³)
+          - entity: sensor.aguada_cisternas_pct
+            name: Cisternas — %
+          - type: divider
+          - entity: sensor.aguada_volume_total
+            name: Sistema Total (m³)
+          - entity: sensor.aguada_volume_total_pct
+            name: Sistema Total %
+
+      # ── Observações gerais ─────────────────────────────────────────────────
+      - type: entities
+        title: "▶ 4. Observações / Ocorrências"
+        show_header_toggle: false
+        entities:
+          - entity: input_boolean.aguada_operacao_recarga_externa
+            name: Recarga externa em andamento
+          - entity: input_boolean.aguada_operacao_manutencao
+            name: Manutenção em andamento
+          - entity: input_boolean.aguada_cbif_manutencao
+            name: Manutenção CBIF
+          - entity: input_boolean.aguada_operacao_inspecao_vazamento
+            name: Inspeção de vazamento
+          - entity: input_text.aguada_relatorio_observacao_geral
+            name: Observações gerais / ocorrências
+
+      # ── Prévia do Relatório (espelho) ──────────────────────────────────────
+      - type: markdown
+        title: "▶ 5. Prévia do Relatório (verificar antes de Gerar)"
+        content: >
+          ```
+          RELATÓRIO DIÁRIO — SISTEMA AGUADA / CMASM
+          Data : {{ now().strftime('%d/%m/%Y') }}   Hora: {{ now().strftime('%H:%M') }}
+          Inspetor: {{ states('input_text.aguada_relatorio_inspetor') | default('—', true) }}
+          ──────────────────────────────────────────────────────────────────────
+          RESERVATÓRIOS
+
+          Local               | Anterior (T) | Atual (T)    | Diferença (T)
+          ──────────────────────────────────────────────────────────────────────
+          Castelo de Consumo  | {{ '%12.1f' % (states('input_number.aguada_relatorio_con_anterior') | float(0) / 1000) }} | {{ '%12.1f' % (states('sensor.aguada_con_volume') | float(0) / 1000) }} | {{ '%+13.1f' % ((states('sensor.aguada_con_volume') | float(0) - states('input_number.aguada_relatorio_con_anterior') | float(0)) / 1000) }}
+          Castelo de Incêndio | {{ '%12.1f' % (states('input_number.aguada_relatorio_cav_anterior') | float(0) / 1000) }} | {{ '%12.1f' % (states('sensor.aguada_cav_volume') | float(0) / 1000) }} | {{ '%+13.1f' % ((states('sensor.aguada_cav_volume') | float(0) - states('input_number.aguada_relatorio_cav_anterior') | float(0)) / 1000) }}
+          Casa de Bombas IF   | {{ '%12.1f' % ((states('input_number.aguada_cbif1_volume_anterior') | float(0) + states('input_number.aguada_cbif2_volume_anterior') | float(0)) / 1000) }} | {{ '%12.1f' % ((states('input_number.aguada_cbif1_volume_manual') | float(0) + states('input_number.aguada_cbif2_volume_manual') | float(0)) / 1000) }} | {{ '%+13.1f' % (((states('input_number.aguada_cbif1_volume_manual') | float(0) + states('input_number.aguada_cbif2_volume_manual') | float(0)) - (states('input_number.aguada_cbif1_volume_anterior') | float(0) + states('input_number.aguada_cbif2_volume_anterior') | float(0))) / 1000) }}
+          Casa de Bombas N3   | {{ '%12.1f' % ((states('input_number.aguada_relatorio_cb31_anterior') | float(0) + states('input_number.aguada_relatorio_cb32_anterior') | float(0)) / 1000) }} | {{ '%12.1f' % (states('sensor.aguada_cb03_volume') | float(0) / 1000) }} | {{ '%+13.1f' % ((states('sensor.aguada_cb03_volume') | float(0) - states('input_number.aguada_relatorio_cb31_anterior') | float(0) - states('input_number.aguada_relatorio_cb32_anterior') | float(0)) / 1000) }}
+          Cisterna nº1        | {{ '%12.1f' % (states('input_number.aguada_relatorio_cie1_anterior') | float(0) / 1000) }} | {{ '%12.1f' % (states('sensor.aguada_cie1_volume') | float(0) / 1000) }} | {{ '%+13.1f' % ((states('sensor.aguada_cie1_volume') | float(0) - states('input_number.aguada_relatorio_cie1_anterior') | float(0)) / 1000) }}
+          Cisterna nº2        | {{ '%12.1f' % (states('input_number.aguada_relatorio_cie2_anterior') | float(0) / 1000) }} | {{ '%12.1f' % (states('sensor.aguada_cie2_volume') | float(0) / 1000) }} | {{ '%+13.1f' % ((states('sensor.aguada_cie2_volume') | float(0) - states('input_number.aguada_relatorio_cie2_anterior') | float(0)) / 1000) }}
+          ──────────────────────────────────────────────────────────────────────
+          TOTAL SISTEMA       | ——————       | {{ '%12.1f' % (states('sensor.aguada_volume_total') | float(0)) }} T  | ——————
+          Sistema %           |              | {{ states('sensor.aguada_volume_total_pct') }}%
+          ──────────────────────────────────────────────────────────────────────
+          CON — Consumo estimado 24h : {{ (states('sensor.aguada_con_consumo_24h') | float(0) / 1000) | round(1) }} T
+          CON — Saldo líquido 24h    : {{ (states('sensor.aguada_con_saldo_24h') | float(0)) | round(1) }} L
+          ──────────────────────────────────────────────────────────────────────
+          HIDRÔMETROS
+
+          Hidrômetro          | Anterior (m³)     | Atual (m³)        | Δ (m³)
+          ──────────────────────────────────────────────────────────────────────
+          HID-IF              | {{ '%17.2f' % (states('input_number.aguada_hidro_if_anterior') | float(0)) }} | {{ '%17.2f' % (states('input_number.aguada_hidro_if_atual') | float(0)) }} | {{ '%7.2f' % (states('sensor.aguada_hidro_if_delta') | float(0)) }}
+          HID-PRAIA           | {{ '%17.2f' % (states('input_number.aguada_hidro_praia_anterior') | float(0)) }} | {{ '%17.2f' % (states('input_number.aguada_hidro_praia_atual') | float(0)) }} | {{ '%7.2f' % (states('sensor.aguada_hidro_praia_delta') | float(0)) }}
+          HID-AV              | {{ '%17.2f' % (states('input_number.aguada_hidro_av_anterior') | float(0)) }} | {{ '%17.2f' % (states('input_number.aguada_hidro_av_atual') | float(0)) }} | {{ '%7.2f' % (states('sensor.aguada_hidro_av_delta') | float(0)) }}
+          HID-AV|AZ           | {{ '%17.2f' % (states('input_number.aguada_hidro_avaz_anterior') | float(0)) }} | {{ '%17.2f' % (states('input_number.aguada_hidro_avaz_atual') | float(0)) }} | {{ '%7.2f' % (states('sensor.aguada_hidro_avaz_delta') | float(0)) }}
+          ──────────────────────────────────────────────────────────────────────
+          AZ estimado: {{ states('sensor.aguada_hidro_az_estimado') }} m³
+          ──────────────────────────────────────────────────────────────────────
+          OBSERVAÇÕES CBIF  : {{ states('input_text.aguada_relatorio_observacao_cbif') | default('—', true) }}
+          OBSERVAÇÕES GERAIS: {{ states('input_text.aguada_relatorio_observacao_geral') | default('—', true) }}
+          {% if is_state('input_boolean.aguada_operacao_recarga_externa', 'on') %}* Recarga externa em andamento{% endif %}
+          {% if is_state('input_boolean.aguada_operacao_manutencao', 'on') %}* Manutenção em andamento{% endif %}
+          {% if is_state('binary_sensor.aguada_alarme_vazamento', 'on') %}★ ALERTA: Vazamento detectado{% endif %}
+          ──────────────────────────────────────────────────────────────────────
+          Gateway: {{ states('sensor.aguada_gateway_status') | upper }}
+          Gerado em: {{ now().strftime('%d/%m/%Y %H:%M:%S') }}
+          ```
+
+      # ── Botão Gerar Relatório ──────────────────────────────────────────────
+      - type: button
+        entity: input_button.aguada_relatorio_gerar
+        name: Gerar e Salvar Relatório
+        icon: mdi:file-chart-outline
+        tap_action:
+          action: call-service
+          service: input_button.press
+          service_data:
+            entity_id: input_button.aguada_relatorio_gerar
+
+      - type: markdown
+        content: >
+          **Após pressionar "Gerar":**
+
+          O relatório é salvo no **Logbook** e aparece como **notificação** no painel.
+          Para importar / exportar: no HA, acesse **Configurações → Backups**
+          ou acesse o painel de notificações e use **Compartilhar / Copiar**.
+
+          Para imprimir / salvar como PDF no celular:
+          → No navegador, toque em **⋮ → Imprimir → Salvar como PDF**
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 11: HIDRÔMETROS
+  # Registro manual de leituras + deltas + estimativa de consumo zonal
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: Hidrômetros
+    path: hidrometros
+    icon: mdi:counter
+    badges:
+      - entity: sensor.aguada_hidro_praia_delta
+        name: PRAIA Δ
+      - entity: sensor.aguada_hidro_if_delta
+        name: IF Δ
+    cards:
+
+      - type: markdown
+        content: >
+          ### 💧 Registro de Leituras dos Hidrômetros
+
+          Register aqui as leituras periódicas dos hidrômetros da rede. O sistema calcula
+          automaticamente o **delta** (consumo entre leituras) e estima o consumo zonal AZ.
+
+          | Hidrômetro | Ponto | Observação |
+          |---|---|---|
+          | **HID-IF** | saída cisterna → CBIF | Tubo submarino |
+          | **HID-PRAIA** | entrada ilha (Praia) | Abastecimento principal |
+          | **HID-AV** | distribuição Água Verm. | Zona AV |
+          | **HID-AV\|AZ** | distribuição combinada AV+AZ | Soma das zonas |
+          | **AZ estimado** | HID-AV\|AZ − HID-AV | Consumo estimado Água Azul |
+
+          > Após preencher todas as leituras, pressione **Registrar** para salvar no logbook.
+
+      # ── HID-IF ────────────────────────────────────────────────────────────
+      - type: entities
+        title: HID-IF — Hidrômetro IF (tubo submarino)
+        show_header_toggle: false
+        entities:
+          - entity: input_number.aguada_hidro_if_anterior
+            name: Leitura anterior (m³)
+          - entity: input_number.aguada_hidro_if_atual
+            name: Leitura atual (m³)
+          - entity: sensor.aguada_hidro_if_delta
+            name: Delta (consumo) m³
+            icon: mdi:water-minus
+          - entity: input_select.aguada_hidro_if_status
+            name: Status
+          - entity: binary_sensor.aguada_hidro_if_valido
+            name: Leitura válida (atual ≥ anterior)
+
+      # ── HID-PRAIA ─────────────────────────────────────────────────────────
+      - type: entities
+        title: HID-PRAIA — Hidrômetro Praia (entrada ilha)
+        show_header_toggle: false
+        entities:
+          - entity: input_number.aguada_hidro_praia_anterior
+            name: Leitura anterior (m³)
+          - entity: input_number.aguada_hidro_praia_atual
+            name: Leitura atual (m³)
+          - entity: sensor.aguada_hidro_praia_delta
+            name: Delta (consumo) m³
+            icon: mdi:water-minus
+          - entity: input_select.aguada_hidro_praia_status
+            name: Status
+          - entity: binary_sensor.aguada_hidro_praia_valido
+            name: Leitura válida (atual ≥ anterior)
+
+      # ── HID-AV e HID-AV|AZ ───────────────────────────────────────────────
+      - type: entities
+        title: HID-AV / HID-AV|AZ — Distribuição
+        show_header_toggle: false
+        entities:
+          - type: section
+            label: HID-AV — Água Vermelha
+          - entity: input_number.aguada_hidro_av_anterior
+            name: Leitura anterior (m³)
+          - entity: input_number.aguada_hidro_av_atual
+            name: Leitura atual (m³)
+          - entity: sensor.aguada_hidro_av_delta
+            name: Delta AV (m³)
+            icon: mdi:water-minus
+          - entity: input_select.aguada_hidro_av_status
+            name: Status HID-AV
+          - entity: binary_sensor.aguada_hidro_av_valido
+            name: Válida
+          - type: section
+            label: HID-AV|AZ — Água Verm. + Água Azul
+          - entity: input_number.aguada_hidro_avaz_anterior
+            name: Leitura anterior (m³)
+          - entity: input_number.aguada_hidro_avaz_atual
+            name: Leitura atual (m³)
+          - entity: sensor.aguada_hidro_avaz_delta
+            name: Delta AV|AZ (m³)
+            icon: mdi:water-minus
+          - entity: input_select.aguada_hidro_avaz_status
+            name: Status HID-AV|AZ
+          - entity: binary_sensor.aguada_hidro_avaz_valido
+            name: Válida
+          - type: section
+            label: AZ Estimado
+          - entity: sensor.aguada_hidro_az_estimado
+            name: Consumo AZ estimado (m³)
+            icon: mdi:water-minus
+
+      # ── Observação e Botão Registrar ──────────────────────────────────────
+      - type: entities
+        title: Observações da Leitura
+        show_header_toggle: false
+        entities:
+          - entity: input_text.aguada_hidro_observacao
+            name: Observações
+
+      - type: button
+        entity: input_button.aguada_hidrometro_registrar
+        name: Registrar Leituras no Logbook
+        icon: mdi:counter
+        tap_action:
+          action: call-service
+          service: input_button.press
+          service_data:
+            entity_id: input_button.aguada_hidrometro_registrar
+
+      # ── Resumo e histórico de deltas ──────────────────────────────────────
+      - type: entities
+        title: Resumo dos Deltas (período atual)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.aguada_hidro_if_delta
+            name: HID-IF Δ (m³)
+          - entity: sensor.aguada_hidro_praia_delta
+            name: HID-PRAIA Δ (m³)
+          - entity: sensor.aguada_hidro_av_delta
+            name: HID-AV Δ (m³)
+          - entity: sensor.aguada_hidro_avaz_delta
+            name: HID-AV|AZ Δ (m³)
+          - type: divider
+          - entity: sensor.aguada_hidro_az_estimado
+            name: AZ estimado (m³)
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 12: LAUDOS DE QUALIDADE
+  # Registro de parâmetros analíticos — Portaria GM/MS nº 2.914/2011
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: Laudos
+    path: laudos
+    icon: mdi:certificate
+    badges: []
+    cards:
+
+      - type: markdown
+        content: >
+          ### 🧪 Laudos de Qualidade da Água
+
+          Registre aqui os resultados dos laudos analíticos conforme **Portaria GM/MS nº 2.914/2011**.
+          Cada registro é salvo no logbook do sistema com data/hora automática.
+
+          **Parâmetros mínimos (Portaria 2.914/2011):**
+
+          | Parâmetro | Limite | Unidade |
+          |---|---|---|
+          | pH | 6,0 a 9,5 | — |
+          | Cloro residual livre | 0,2 a 5,0 | mg/L |
+          | Turbidez | ≤ 1 (dist.) / ≤ 5 (tratada) | uT (NTU) |
+          | Coliformes totais | 0 | UFC/100 mL |
+          | Escherichia coli | 0 | UFC/100 mL |
+
+          > Após preencher o formulário abaixo, pressione **Registrar Laudo** para salvar.
+
+      # ── Formulário de Laudo ────────────────────────────────────────────────
+      - type: entities
+        title: Formulário — Dados de Identificação
+        show_header_toggle: false
+        entities:
+          - entity: input_select.aguada_laudo_ponto_coleta
+            name: Ponto de coleta
+          - entity: input_datetime.aguada_laudo_data_coleta
+            name: Data e hora da coleta
+          - entity: input_datetime.aguada_laudo_data_validade
+            name: Validade do laudo
+          - entity: input_text.aguada_laudo_laboratorio
+            name: Laboratório responsável
+          - entity: input_text.aguada_laudo_responsavel
+            name: Responsável pela coleta
+
+      - type: entities
+        title: Formulário — Parâmetros Analíticos
+        show_header_toggle: false
+        entities:
+          - entity: input_number.aguada_laudo_ph
+            name: pH (limite 6,0–9,5)
+          - entity: input_number.aguada_laudo_cloro
+            name: Cloro residual (mg/L — mín. 0,2)
+          - entity: input_number.aguada_laudo_turbidez
+            name: Turbidez (uT — máx. 1,0 dist.)
+          - entity: input_number.aguada_laudo_coliformes
+            name: Coliformes totais (UFC/100mL — limite 0)
+          - type: divider
+          - entity: input_select.aguada_laudo_conformidade
+            name: Conformidade geral (Portaria 2.914/2011)
+          - entity: input_text.aguada_laudo_observacao
+            name: Observações adicionais
+
+      # ── Botão Registrar ────────────────────────────────────────────────────
+      - type: button
+        entity: input_button.aguada_laudo_registrar
+        name: Registrar Laudo no Logbook
+        icon: mdi:certificate-outline
+        tap_action:
+          action: call-service
+          service: input_button.press
+          service_data:
+            entity_id: input_button.aguada_laudo_registrar
+
+      # ── Nota sobre histórico ───────────────────────────────────────────────
+      - type: markdown
+        content: >
+          ### 📋 Como acessar o histórico de laudos
+
+          Os laudos são registrados no **Logbook** do Home Assistant.
+          Para visualizar:
+          1. Acesse o menu lateral → **Logbook** (Diário)
+          2. Filtre por: **"Laudo de Qualidade da Água"**
+          3. Selecione o período desejado
+
+          Laudos **não conformes** geram um alerta persistente visível no painel principal.
+
+          > Para exportar ou arquivar laudos em PDF, utilize o arquivo original do laboratório.
+          > O sistema apenas registra os dados para rastreabilidade operacional.
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VIEW 13: REFERÊNCIAS TÉCNICAS
+  # Normas, boas práticas, POPs, contatos e guias do sistema hidráulico
+  # ═══════════════════════════════════════════════════════════════════════════
+  - title: Referências
+    path: referencias
+    icon: mdi:book-open-page-variant
+    badges: []
+    cards:
+
+      - type: markdown
+        content: >
+          # 📚 Referências Técnicas — Sistema Aguada
+
+          Base normativa e operacional do sistema supervisório de abastecimento de água da
+          **CMASM — Ilha do Engenho**.
+
+          ---
+
+          ## 1. Normas ABNT Aplicáveis
+
+          | Norma | Título | Aplicação no Sistema |
+          |---|---|---|
+          | **NBR 12217** | Projeto de reservatório de distribuição | Volumes operacionais, níveis, segurança |
+          | **NBR 12218** | Projeto de rede de distribuição | Pontos de coleta, pressões, ligação com bombas |
+          | **NBR 12211** | Concepção de sistemas de abastecimento | Visão sistêmica de projeto |
+          | **NBR 12214** | Projeto de estação elevatória | Automação de bombas, setpoints |
+          | **NBR 12215** | Projeto de adutora de água | Tubulações principais, válvulas |
+          | **NBR 5626** | Instalações prediais de água fria | **CRÍTICA:** recalque, níveis mínimos, bloqueios |
+          | **NBR ISO 24510** | Avaliação de serviços de água | KPIs, dashboards, indicadores |
+          | **NBR ISO 24511** | Gestão de serviços de água e esgoto | Procedimentos operacionais |
+
+          ---
+
+          ## 2. Portaria GM/MS nº 2.914/2011 — Potabilidade
+
+          Estabelece os **padrões de potabilidade** da água para consumo humano.
+
+          | Parâmetro | Valor de Referência | Observação |
+          |---|---|---|
+          | pH | 6,0 a 9,5 | Distribuição |
+          | Turbidez | ≤ 1 uT (NTU) | Na saída do tratamento |
+          | Turbidez | ≤ 5 uT (NTU) | Na distribuição (máx.) |
+          | Cloro residual livre | 0,2 a 5,0 mg/L | Em toda a rede |
+          | Coliformes totais | Ausência | Em 100 mL |
+          | *Escherichia coli* | Ausência | Em 100 mL |
+          | Fluoreto | 0,6 a 0,9 mg/L | (quando fluoretado) |
+          | Nitrato | ≤ 10 mg/L (NO₃⁻) | — |
+
+          > Verificar atualizações/revisões conforme vigência legal.
+
+      - type: markdown
+        content: >
+          ## 3. Regras de Segurança Operacional (NBR 5626 + NBR 12214)
+
+          ### Hierarquia de Níveis Operacionais
+
+          | Nível | Estado | Ação Requerida |
+          |---|---|---|
+          | > Máximo | Transbordo | Alarme + parar bomba |
+          | Máximo operacional | Normal alto | Parar bomba (modo automático) |
+          | Normal | Operação | Manter |
+          | Mínimo operacional | Alerta | Ligar bomba (modo automático) |
+          | < Mínimo operacional | **BLOQUEIO** | **Desligar bomba — risco de cavitação** |
+          | Crítico absoluto | Falha grave | Alarme sonoro + notificação |
+
+          ### Regra de Ouro (NBR 5626)
+          > **Nunca acionar bomba com nível abaixo do mínimo operacional.**
+          > O risco de operação a seco danifica irreversivelmente a bomba.
+
+          ### Registro Obrigatório de Eventos
+          Toda ação de bomba (manual ou automática) deve registrar:
+          - Timestamp (UTC)
+          - Estado anterior e novo
+          - Usuário responsável (se manual)
+          - Motivo (se override de bloqueio)
+
+      - type: markdown
+        content: >
+          ## 4. Boas Práticas Operacionais
+
+          ### Monitoramento de Nível (Sensor Ultrassônico)
+          - **Fórmula:** `nivel_cm = nivel_max_cm − (distancia_medida_cm − sensor_offset_cm)`
+          - Rejeitar leituras: negativas, zero, acima do máximo de faixa ou salto > 10 cm
+          - Utilizar média móvel de 5 amostras (já implementado no firmware)
+          - Verificar sensores periodicamente: eco perdido por > 5 min = alarme
+
+          ### Hidrômetros
+          - Registrar leituras no mesmo horário padrão (ex: toda Segunda-feira 08:00)
+          - Leitura atual deve ser sempre ≥ anterior (o sistema valida automaticamente)
+          - Em caso de discrepância > 10%: investigar vazamento ou calibração
+          - **Conciliação:** Volume consumido (Δ reservatórios) ≈ Volume medido (Δ hidrômetros)
+
+          ### Laudos de Qualidade
+          - Frequência mínima recomendada: mensal (verificar exigências da FUNASA/SAAE)
+          - Em caso de não conformidade: notificar imediatamente o responsável sanitário
+          - Manter arquivo físico dos laudos laboratoriais originais
+
+          ### Inspeção Visual dos Reservatórios
+          - Inspecionar tampas e bordas de transbordamento mensalmente
+          - Verificar sinais de infiltração, eflorescência ou trincas
+          - Registrar inspeções na aba **Operação**
+
+      - type: markdown
+        content: >
+          ## 5. Procedimentos Operacionais Resumidos (POPs)
+
+          ### POP-01: Abastecimento por Caminhão-Pipa
+          1. Selecionar reservatório destino na aba **Operação**
+          2. Ativar toggle **Recarga externa em andamento**
+          3. Anotar volume estimado em **Ajuste manual de volume**
+          4. Observar variação de nível no dashboard em tempo real
+          5. Desativar toggle ao concluir + registrar observação
+
+          ### POP-02: Anomalia de Nível (Queda Acelerada)
+          1. Verificar alarme na aba **Vazamentos**
+          2. Isolar visualmente o reservatório (fechar válvulas)
+          3. Ativar toggle **Inspeção de vazamento**
+          4. Registrar ponto suspeito em **Observação do operador**
+          5. Notificar responsável técnico
+
+          ### POP-03: Falha de Sensor
+          1. Sensor mostrará "unavailable" ou distância inválida
+          2. Verificar alimentação do node ESP32 (LED de status)
+          3. Verificar canal 1 Wi-Fi (ESP-NOW usa canal fixo)
+          4. Verificar conexão USB do gateway (bridge.py)
+          5. Se necessário, reiniciar gateway fisicamente
+
+          ### POP-04: Registro de Laudo Analítico
+          1. Acessar aba **Laudos**
+          2. Preencher todos os campos (ponto, data, parâmetros, conformidade)
+          3. Pressionar **Registrar Laudo**
+          4. Em caso de **Não conforme**: alarme é gerado e e-mail/notificação enviado
+
+      - type: markdown
+        content: >
+          ## 6. Fluxograma Hídrico — Ilha do Engenho
+
+          ```
+          Água Verm. (HID-AV) ──► Rede AV
+                          ┐
+          HID-PRAIA      ─┼─► CIE1 / CIE2 ──► CB31 / CB32 ──► CON (Rede Consumo)
+          (entrada ilha)  │   (Cisternas)     (Bombas N3)   └► CAV (Rede Incêndio)
+                          └─► CBIF ──► ? (Casa de Bombas IF)
+          HID-AV|AZ ─────────► Rede AV + AZ
+          HID-IF ────────────► CBIF (tubo submarino)
+          ```
+
+          ### Capacidades por Reservatório
+
+          | Local | ID | Cap. (L) | Cap. (m³) | Sensores |
+          |---|---|---|---|---|
+          | Castelo de Consumo | CON | 80.000 | 80 | 1 |
+          | Castelo de Incêndio | CAV | 80.000 | 80 | 1 |
+          | Casa de Bombas N3.1 | CB31 | 40.000 | 40 | 1 |
+          | Casa de Bombas N3.2 | CB32 | 40.000 | 40 | 1 |
+          | Cisterna IE 1 | CIE1 | 245.000 | 245 | 1 |
+          | Cisterna IE 2 | CIE2 | 245.000 | 245 | 1 |
+          | Casa de Bombas IF 1 | CBIF1 | 40.000 | 40 | Sem sensor (manual) |
+          | Casa de Bombas IF 2 | CBIF2 | 40.000 | 40 | Sem sensor (manual) |
+          | **TOTAL** | — | **810.000** | **810** | — |
+
+      - type: markdown
+        content: >
+          ## 7. Contatos Institucionais
+
+          | Entidade | Função | Observação |
+          |---|---|---|
+          | **CMASM** | Gestão do sistema | Ilha do Engenho |
+          | **FUNASA** | Vigilância sanitária água rural | — |
+          | **SAAE / CEDAE** | Eventual suporte técnico | — |
+          | **ABNT** | Normas técnicas | abnt.org.br |
+          | **Ministério da Saúde** | Portaria 2.914/2011 | saude.gov.br |
+
+          > Completar esta tabela com contatos reais (telefones, e-mails, responsáveis técnicos)
+          > conforme disponíveis no sistema de gestão da CMASM.
+
+          ---
+
+          ## 8. Documentação Técnica
+
+          Manter os seguintes documentos arquivados e atualizados:
+
+          - **Plantas as-built** dos reservatórios (cotas, dimensões, locação)
+          - **Plantas da rede de distribuição** (traçado, diâmetros, materiais)
+          - **Manuais dos equipamentos** (bombas, sensores, gateway ESP32)
+          - **Laudos de qualidade** (arquivo físico e digital)
+          - **Relatórios de inspeção** visual e manutenção preventiva
+          - **Registros de acionamento** de bombas e intervenções manuais
+
+          > Para vincular documentos (PDFs, imagens) diretamente ao Home Assistant,
+          > utilize a integração **Local Files** ou **Samba/NFS** e crie um card de imagem/media.
+
+          ---
+          *Sistema Aguada v3 — CMASM | Atualizado: {{ now().strftime('%m/%Y') }}*

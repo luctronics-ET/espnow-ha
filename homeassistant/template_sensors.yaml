@@ -19,6 +19,7 @@
 
     # ── AGREGADOS GLOBAIS ──────────────────────────────────────────────────────
 
+    # Capacidades: CON 80kL + CAV 80kL + CB31 40kL + CB32 40kL + CIE1 245kL + CIE2 245kL + CBIF 80kL = 810.000L
     - name: "Aguada Volume Total"
       unique_id: aguada_volume_total
       unit_of_measurement: "m³"
@@ -31,7 +32,8 @@
         {% set cb32 = states('sensor.aguada_cb32_volume') | float(0) %}
         {% set cie1 = states('sensor.aguada_cie1_volume') | float(0) %}
         {% set cie2 = states('sensor.aguada_cie2_volume') | float(0) %}
-        {{ ((con + cav + cb31 + cb32 + cie1 + cie2) / 1000) | round(1) }}
+        {% set cbif = states('sensor.aguada_cbif_volume') | float(0) %}
+        {{ ((con + cav + cb31 + cb32 + cie1 + cie2 + cbif) / 1000) | round(1) }}
 
     - name: "Aguada Volume Total %"
       unique_id: aguada_volume_total_pct
@@ -45,7 +47,8 @@
         {% set cb32 = states('sensor.aguada_cb32_volume') | float(0) %}
         {% set cie1 = states('sensor.aguada_cie1_volume') | float(0) %}
         {% set cie2 = states('sensor.aguada_cie2_volume') | float(0) %}
-        {{ ((con + cav + cb31 + cb32 + cie1 + cie2) / 730000 * 100) | round(1) }}
+        {% set cbif = states('sensor.aguada_cbif_volume') | float(0) %}
+        {{ ((con + cav + cb31 + cb32 + cie1 + cie2 + cbif) / 810000 * 100) | round(1) }}
 
     # CB03 = soma dos dois reservatórios da Casa de Bombas N3
     - name: "Aguada CB03 Volume"
@@ -87,6 +90,89 @@
         {% set cie1 = states('sensor.aguada_cie1_volume') | float(0) %}
         {% set cie2 = states('sensor.aguada_cie2_volume') | float(0) %}
         {{ ((cie1 + cie2) / 490000 * 100) | round(1) }}
+
+    # ── CONTEXTO OPERACIONAL / BALANÇO LÍQUIDO ───────────────────────────────
+
+    - name: "Aguada Contexto Operacional"
+      unique_id: aguada_contexto_operacional
+      icon: mdi:clipboard-text-clock-outline
+      state: >
+        {% set flags = [] %}
+        {% if is_state('input_boolean.aguada_operacao_recarga_externa', 'on') %}
+          {% set flags = flags + ['recarga_externa'] %}
+        {% endif %}
+        {% if is_state('input_boolean.aguada_operacao_manutencao', 'on') %}
+          {% set flags = flags + ['manutencao'] %}
+        {% endif %}
+        {% if is_state('input_boolean.aguada_operacao_bomba_manual', 'on') %}
+          {% set flags = flags + ['bomba_manual'] %}
+        {% endif %}
+        {% if is_state('input_boolean.aguada_operacao_inspecao_vazamento', 'on') %}
+          {% set flags = flags + ['inspecao_vazamento'] %}
+        {% endif %}
+        {% if flags | count > 0 %}
+          {{ flags | join(',') }}
+        {% else %}
+          normal
+        {% endif %}
+
+    - name: "Aguada Saldo Total 12h"
+      unique_id: aguada_saldo_total_12h
+      unit_of_measurement: "m³"
+      state_class: measurement
+      icon: mdi:scale-balance
+      state: >
+        {% set con  = states('sensor.aguada_con_saldo_12h')  | float(0) %}
+        {% set cav  = states('sensor.aguada_cav_saldo_12h')  | float(0) %}
+        {% set cb31 = states('sensor.aguada_cb31_saldo_12h') | float(0) %}
+        {% set cb32 = states('sensor.aguada_cb32_saldo_12h') | float(0) %}
+        {% set cie1 = states('sensor.aguada_cie1_saldo_12h') | float(0) %}
+        {% set cie2 = states('sensor.aguada_cie2_saldo_12h') | float(0) %}
+        {{ ((con + cav + cb31 + cb32 + cie1 + cie2) / 1000) | round(2) }}
+
+    - name: "Aguada Saldo Total 24h"
+      unique_id: aguada_saldo_total_24h
+      unit_of_measurement: "m³"
+      state_class: measurement
+      icon: mdi:scale-balance
+      state: >
+        {% set con  = states('sensor.aguada_con_saldo_24h')  | float(0) %}
+        {% set cav  = states('sensor.aguada_cav_saldo_24h')  | float(0) %}
+        {% set cb31 = states('sensor.aguada_cb31_saldo_24h') | float(0) %}
+        {% set cb32 = states('sensor.aguada_cb32_saldo_24h') | float(0) %}
+        {% set cie1 = states('sensor.aguada_cie1_saldo_24h') | float(0) %}
+        {% set cie2 = states('sensor.aguada_cie2_saldo_24h') | float(0) %}
+        {{ ((con + cav + cb31 + cb32 + cie1 + cie2) / 1000) | round(2) }}
+
+    - name: "Aguada Castelos Saldo 24h"
+      unique_id: aguada_castelos_saldo_24h
+      unit_of_measurement: "m³"
+      state_class: measurement
+      icon: mdi:castle
+      state: >
+        {% set con = states('sensor.aguada_con_saldo_24h') | float(0) %}
+        {% set cav = states('sensor.aguada_cav_saldo_24h') | float(0) %}
+        {{ ((con + cav) / 1000) | round(2) }}
+
+    - name: "Aguada Bombas N3 Saldo 24h"
+      unique_id: aguada_bombas_saldo_24h
+      unit_of_measurement: "m³"
+      state_class: measurement
+      icon: mdi:pump
+      state: >
+        {% set cb31 = states('sensor.aguada_cb31_saldo_24h') | float(0) %}
+        {% set cb32 = states('sensor.aguada_cb32_saldo_24h') | float(0) %}
+        {{ ((cb31 + cb32) / 1000) | round(2) }}
+
+    - name: "Aguada Cisternas Saldo 24h"
+      unique_id: aguada_cisternas_saldo_24h
+      unit_of_measurement: "m³"
+      state_class: measurement
+      icon: mdi:water-pump
+      state: >
+        {% set cie1 = states('sensor.aguada_cie1_saldo_24h') | float(0) %}
+        {% set cie2 = states('sensor.aguada_cie2_saldo_24h') | float(0) %}
+        {{ ((cie1 + cie2) / 1000) | round(2) }}
 
     # ── CONSUMO ESTIMADO 24H POR RESERVATÓRIO ─────────────────────────────────
     # Cálculo: max_volume_24h - min_volume_24h
@@ -262,6 +348,128 @@
         {% set m2 = states('sensor.aguada_cie2_pct_media_7d') | float(0) %}
         {{ ((m1 + m2) / 2) | round(1) }}
 
+    # ── CBIF — Casa de Bombas IF (SEM SENSOR — entrada manual) ─────────────────
+    # 2 reservatórios de 40.000L cada → total 80.000L
+    # EL insere volume diariamente (~06h00) via Relatório / aba CBIF
+
+    - name: "Aguada CBIF1 Volume"
+      unique_id: aguada_cbif1_volume
+      unit_of_measurement: "L"
+      state_class: measurement
+      icon: mdi:water
+      state: >
+        {{ states('input_number.aguada_cbif1_volume_manual') | float(0) | round(0) | int }}
+
+    - name: "Aguada CBIF1 Volume Pct"
+      unique_id: aguada_cbif1_pct
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:water-percent
+      state: >
+        {{ (states('input_number.aguada_cbif1_volume_manual') | float(0) / 40000 * 100) | round(1) }}
+
+    - name: "Aguada CBIF2 Volume"
+      unique_id: aguada_cbif2_volume
+      unit_of_measurement: "L"
+      state_class: measurement
+      icon: mdi:water
+      state: >
+        {{ states('input_number.aguada_cbif2_volume_manual') | float(0) | round(0) | int }}
+
+    - name: "Aguada CBIF2 Volume Pct"
+      unique_id: aguada_cbif2_pct
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:water-percent
+      state: >
+        {{ (states('input_number.aguada_cbif2_volume_manual') | float(0) / 40000 * 100) | round(1) }}
+
+    - name: "Aguada CBIF Volume"
+      unique_id: aguada_cbif_volume
+      unit_of_measurement: "L"
+      state_class: measurement
+      icon: mdi:water
+      state: >
+        {% set cbif1 = states('input_number.aguada_cbif1_volume_manual') | float(0) %}
+        {% set cbif2 = states('input_number.aguada_cbif2_volume_manual') | float(0) %}
+        {{ (cbif1 + cbif2) | round(0) | int }}
+
+    - name: "Aguada CBIF Volume Pct"
+      unique_id: aguada_cbif_pct
+      unit_of_measurement: "%"
+      state_class: measurement
+      icon: mdi:water-percent
+      state: >
+        {% set cbif1 = states('input_number.aguada_cbif1_volume_manual') | float(0) %}
+        {% set cbif2 = states('input_number.aguada_cbif2_volume_manual') | float(0) %}
+        {{ ((cbif1 + cbif2) / 80000 * 100) | round(1) }}
+
+    # Delta CBIF diário = total_hoje − total_anterior (ontem)
+    - name: "Aguada CBIF Delta"
+      unique_id: aguada_cbif_delta
+      unit_of_measurement: "L"
+      state_class: measurement
+      icon: mdi:delta
+      state: >
+        {% set cbif1 = states('input_number.aguada_cbif1_volume_manual') | float(0) %}
+        {% set cbif2 = states('input_number.aguada_cbif2_volume_manual') | float(0) %}
+        {% set ant1  = states('input_number.aguada_cbif1_volume_anterior') | float(cbif1) %}
+        {% set ant2  = states('input_number.aguada_cbif2_volume_anterior') | float(cbif2) %}
+        {{ ((cbif1 + cbif2) - (ant1 + ant2)) | round(0) | int }}
+
+    # ── Hidrômetros — Delta (leitura atual − anterior) ─────────────────────────
+
+    - name: "Aguada Hidro IF Delta"
+      unique_id: aguada_hidro_if_delta
+      unit_of_measurement: "m³"
+      state_class: measurement
+      icon: mdi:counter
+      state: >
+        {% set a = states('input_number.aguada_hidro_if_atual')    | float(0) %}
+        {% set b = states('input_number.aguada_hidro_if_anterior') | float(0) %}
+        {{ [a - b, 0] | max | round(2) }}
+
+    - name: "Aguada Hidro PRAIA Delta"
+      unique_id: aguada_hidro_praia_delta
+      unit_of_measurement: "m³"
+      state_class: measurement
+      icon: mdi:counter
+      state: >
+        {% set a = states('input_number.aguada_hidro_praia_atual')    | float(0) %}
+        {% set b = states('input_number.aguada_hidro_praia_anterior') | float(0) %}
+        {{ [a - b, 0] | max | round(2) }}
+
+    - name: "Aguada Hidro AV Delta"
+      unique_id: aguada_hidro_av_delta
+      unit_of_measurement: "m³"
+      state_class: measurement
+      icon: mdi:counter
+      state: >
+        {% set a = states('input_number.aguada_hidro_av_atual')    | float(0) %}
+        {% set b = states('input_number.aguada_hidro_av_anterior') | float(0) %}
+        {{ [a - b, 0] | max | round(2) }}
+
+    - name: "Aguada Hidro AV|AZ Delta"
+      unique_id: aguada_hidro_avaz_delta
+      unit_of_measurement: "m³"
+      state_class: measurement
+      icon: mdi:counter
+      state: >
+        {% set a = states('input_number.aguada_hidro_avaz_atual')    | float(0) %}
+        {% set b = states('input_number.aguada_hidro_avaz_anterior') | float(0) %}
+        {{ [a - b, 0] | max | round(2) }}
+
+    # AZ estimado: consumo zonal Água Azul = delta(AV|AZ) - delta(AV)
+    - name: "Aguada Hidro AZ Estimado"
+      unique_id: aguada_hidro_az_estimado
+      unit_of_measurement: "m³"
+      state_class: measurement
+      icon: mdi:water-minus
+      state: >
+        {% set avaz = states('sensor.aguada_hidro_avaz_delta') | float(0) %}
+        {% set av   = states('sensor.aguada_hidro_av_delta')   | float(0) %}
+        {{ [avaz - av, 0] | max | round(2) }}
+
 # ── SENSORES BINÁRIOS — DETECÇÃO DE VAZAMENTO ─────────────────────────────────
 # Limiares baseados em 5% da capacidade por hora de perda contínua:
 #   CON/CAV  (80.000L): 5% = 4.000 L/h = 1.111 L/s → threshold: -1.111 L/s
@@ -270,6 +478,19 @@
 # Janela de detecção: 2 horas de média (statistics_sensors.yaml)
 
 - binary_sensor:
+
+    - name: "Aguada Contexto Operacional Ativo"
+      unique_id: aguada_contexto_operacional_ativo
+      icon: mdi:clipboard-alert-outline
+      device_class: running
+      state: >
+        {{ is_state('input_boolean.aguada_operacao_recarga_externa', 'on')
+           or is_state('input_boolean.aguada_operacao_manutencao', 'on')
+           or is_state('input_boolean.aguada_operacao_bomba_manual', 'on')
+           or is_state('input_boolean.aguada_operacao_inspecao_vazamento', 'on')
+           or (states('input_number.aguada_operacao_ajuste_volume_l') | float(0) != 0)
+           or (states('input_select.aguada_operacao_tipo') not in ['unknown', 'unavailable', 'Nenhum'])
+           or (states('input_text.aguada_operacao_observacao') | trim != '') }}
 
     - name: "Aguada CON Vazamento"
       unique_id: aguada_con_vazamento
@@ -344,3 +565,33 @@
            or states('sensor.aguada_cb32_pct') | float(100) < 10
            or states('sensor.aguada_cie1_pct') | float(100) < 10
            or states('sensor.aguada_cie2_pct') | float(100) < 10 }}
+
+    # ── Hidrômetros — Validação de leitura (atual ≥ anterior) ─────────────────
+
+    - name: "Aguada Hidro IF Válido"
+      unique_id: aguada_hidro_if_valido
+      icon: mdi:check-circle-outline
+      state: >
+        {{ states('input_number.aguada_hidro_if_atual') | float(0)
+           >= states('input_number.aguada_hidro_if_anterior') | float(0) }}
+
+    - name: "Aguada Hidro PRAIA Válido"
+      unique_id: aguada_hidro_praia_valido
+      icon: mdi:check-circle-outline
+      state: >
+        {{ states('input_number.aguada_hidro_praia_atual') | float(0)
+           >= states('input_number.aguada_hidro_praia_anterior') | float(0) }}
+
+    - name: "Aguada Hidro AV Válido"
+      unique_id: aguada_hidro_av_valido
+      icon: mdi:check-circle-outline
+      state: >
+        {{ states('input_number.aguada_hidro_av_atual') | float(0)
+           >= states('input_number.aguada_hidro_av_anterior') | float(0) }}
+
+    - name: "Aguada Hidro AVAZ Válido"
+      unique_id: aguada_hidro_avaz_valido
+      icon: mdi:check-circle-outline
+      state: >
+        {{ states('input_number.aguada_hidro_avaz_atual') | float(0)
+           >= states('input_number.aguada_hidro_avaz_anterior') | float(0) }}

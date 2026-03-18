@@ -133,10 +133,53 @@ Incompatível com modo relay. NVS flag `deep_sleep_enabled`.
 ---
 
 ### Fase 10 — Balanço Hídrico + Dashboard HA
-**Status: ⬜ Não iniciado**
+**Status: 🟠 Parcial / repriorizada**
 
-Cálculo: `volume(18h) - volume(06h)`. Alerta de vazamento por limiar.
-Dashboard: cards HA com nível, %, volume, RSSI por reservatório.
+Já existe uma base relevante em `homeassistant/`:
+
+- `dashboard.yaml` com múltiplas views (visão geral, consumo, vazamentos, castelos, bombas, cisternas, sistema, mobile)
+- `template_sensors.yaml` com agregados, consumo 24h, taxa de variação, médias e alarmes
+- `statistics_sensors.yaml` com min/max 24h, taxa em janela e médias 7d
+- `automations.yaml` com alertas de nível, gateway, vazamento e relatório diário
+
+O foco agora deixa de ser “criar dashboard” e passa a ser **segunda geração operacional**:
+
+1. **Melhorar UX das telas do HA**
+	- cards mais operacionais para celular e desktop
+	- separar visão executiva, operação diária e diagnóstico técnico
+	- destacar anomalias, recarga, consumo e intervenções manuais sem poluir a tela principal
+
+2. **Melhorar o cálculo do balanço hídrico**
+	- sair do modelo simplificado `max(24h) - min(24h)` como proxy universal
+	- introduzir janelas fixas de operação (ex.: 06h/18h) e/ou balanço por turno
+	- separar melhor: consumo, recarga, transferência interna e perda suspeita
+	- tratar ruído/reabastecimento para não confundir enchimento com “consumo do dia”
+
+3. **Permitir entrada de dados por usuários/operadores**
+	- helpers do HA para observações, eventos operacionais e ajustes de contexto
+	- registrar intervenções como limpeza, manutenção, recarga externa, bomba ligada/desligada, inspeção de vazamento
+	- usar esses inputs para contextualizar o balanço e reduzir falso positivo operacional
+
+Gaps atuais identificados:
+
+- o dashboard já existe, mas ainda está mais “telemetria técnica” do que “centro operacional”
+- o sensor `consumo_24h` hoje mede essencialmente **amplitude diária** (`max - min`), o que não equivale sempre a consumo líquido
+- a detecção de vazamento usa limiar fixo sobre `change_second`, sem contexto operacional manual
+
+Primeiro incremento já implementado nesta fase:
+
+- `input_boolean.yaml`, `input_select.yaml`, `input_text.yaml`, `input_number.yaml` adicionados em `homeassistant/`
+- `configuration.yaml` atualizado para incluir helpers operacionais
+- `statistics_sensors.yaml` ganhou sensores de **saldo líquido** (`change`) em 12h e 24h por reservatório
+- `template_sensors.yaml` ganhou agregados de saldo e contexto operacional
+- `dashboard.yaml` ganhou a view **Operação** para contexto manual + balanço
+
+Pendente:
+- [ ] Redesenhar a view principal com foco operacional
+- [x] Criar primeira view específica de operação/balanço
+- [ ] Definir fórmula-alvo do balanço (consumo, recarga, transferência, perda)
+- [x] Criar helpers para entrada manual do operador
+- [ ] Integrar eventos manuais às automações e ao dashboard
 
 ---
 
@@ -169,11 +212,11 @@ Entregáveis:
 
 ## Próximas Ações Imediatas
 
-1. **Implementar CFG_GROUP/CFG_ITEM no bridge/gateway/node**
-2. **Testar transação CONFIG item-a-item em um node real**
-3. **Decidir limpeza final de legados Home Assistant (`mqtt_*_sensors.yaml`)**
-4. **Iniciar PoC ESPHome (trilha A)** — criar 1 device ESPHome para consumir/publicar MQTT `aguada/...`
-5. **Planejar trilha B** — preparar 1 nó experimental ESPHome para benchmark de 72h
+1. **Redefinir a Fase 10 no HA** — telas operacionais + cálculo de balanço + helpers de entrada manual
+2. **Implementar CFG_GROUP/CFG_ITEM no bridge/gateway/node**
+3. **Testar transação CONFIG item-a-item em um node real**
+4. **Decidir limpeza final de legados Home Assistant (`mqtt_*_sensors.yaml`)**
+5. **Iniciar PoC ESPHome (trilha A)** — criar 1 device ESPHome para consumir/publicar MQTT `aguada/...`
 
 ---
 
@@ -193,3 +236,5 @@ Entregáveis:
 | 1 | CMD_CONFIG full transfer | Protocolo extendido ou chunk via PKT_OTA_BLOCK? |
 | 2 | Gateway timestamp sem NTP | Atual: bridge.py envia SETTIME. OK para produção? |
 | 3 | node/src/neighbor_table.h era skeleton | Removido para .delete — substituído por mesh.cpp |
+| 4 | Balanço hídrico diário | Manter `max-min 24h` como métrica auxiliar e criar balanço por turno/janela fixa? |
+| 5 | Entrada manual no HA | Quais eventos/ajustes o operador deve poder registrar na UI? |

@@ -1,0 +1,55 @@
+# Aguada — Campos de texto livre
+
+# Contexto operacional geral
+aguada_operacao_observacao:
+  name: Aguada — Observação do operador
+  icon: mdi:text-box-outline
+  max: 255
+
+# ── CBIF — Observação e notas operacionais ─────────────────────────────────
+
+aguada_cbif_observacao:
+  name: CBIF — Observação operacional
+  icon: mdi:text-box-outline
+  max: 255
+
+# ── Hidrômetros — Observação da leitura ───────────────────────────────────
+
+aguada_hidro_observacao:
+  name: Hidrômetros — Observações da leitura
+  icon: mdi:text-box-outline
+  max: 255
+
+# ── Laudos de Qualidade ────────────────────────────────────────────────────
+
+aguada_laudo_laboratorio:
+  name: Laudo — Laboratório responsável
+  icon: mdi:flask-outline
+  max: 100
+
+aguada_laudo_responsavel:
+  name: Laudo — Responsável pela coleta
+  icon: mdi:account
+  max: 100
+
+aguada_laudo_observacao:
+  name: Laudo — Observações adicionais
+  icon: mdi:text-box-outline
+  max: 255
+
+# ── Relatório Diário ───────────────────────────────────────────────────────────
+
+aguada_relatorio_inspetor:
+  name: Relatório — Nome do inspetor (EL)
+  icon: mdi:account-hard-hat
+  max: 80
+
+aguada_relatorio_observacao_cbif:
+  name: Relatório — Observação CBIF
+  icon: mdi:text-box-outline
+  max: 255
+
+aguada_relatorio_observacao_geral:
+  name: Relatório — Observação geral / ocorrências
+  icon: mdi:text-box-outline
+  max: 500

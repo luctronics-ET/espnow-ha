@@ -1,0 +1,27 @@
+# Aguada — Helpers booleanos de contexto operacional
+
+aguada_operacao_recarga_externa:
+  name: Aguada — Recarga externa em andamento
+  icon: mdi:tanker-truck
+
+aguada_operacao_manutencao:
+  name: Aguada — Manutenção em andamento
+  icon: mdi:wrench-cog
+
+aguada_operacao_bomba_manual:
+  name: Aguada — Operação manual de bomba
+  icon: mdi:pump
+
+aguada_operacao_inspecao_vazamento:
+  name: Aguada — Inspeção de vazamento
+  icon: mdi:pipe-leak
+
+# ── CBIF — Flags operacionais ─────────────────────────────────────────────
+
+aguada_cbif_manutencao:
+  name: CBIF — Manutenção em andamento
+  icon: mdi:wrench-cog
+
+aguada_cbif_alerta_bomba_seca:
+  name: CBIF — Alerta bomba seca ativo
+  icon: mdi:alert-circle

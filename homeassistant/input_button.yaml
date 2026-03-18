@@ -1,0 +1,18 @@
+# Aguada — Botões de ação manual (input_button)
+# Cada botão dispara a automação correspondente quando pressionado.
+
+aguada_laudo_registrar:
+  name: Aguada — Registrar Laudo
+  icon: mdi:certificate-outline
+
+aguada_hidrometro_registrar:
+  name: Aguada — Registrar Leitura de Hidrômetros
+  icon: mdi:counter
+
+aguada_cbif_registrar_estado:
+  name: CBIF — Registrar Estado Operacional
+  icon: mdi:content-save-check-outline
+
+aguada_relatorio_gerar:
+  name: Aguada — Gerar Relatório Diário
+  icon: mdi:file-chart-outline
