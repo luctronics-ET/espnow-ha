@@ -52,4 +52,4 @@ aguada_relatorio_observacao_cbif:
 aguada_relatorio_observacao_geral:
   name: Relatório — Observação geral / ocorrências
   icon: mdi:text-box-outline
-  max: 500
+  max: 255
