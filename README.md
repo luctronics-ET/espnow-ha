@@ -4,20 +4,25 @@
 Sistema de telemetria de nível/volume de reservatórios com:
 
 - nodes ESP32-C3 (HC-SR04)
-- gateway ESP32-S3 (ESP-NOW → USB serial)
+- gateway ESP32-S3 **ou ESP32 clássico** (ESP-NOW → USB serial)
 - `tools/bridge.py` (cálculo + MQTT + MQTT Discovery)
 - Home Assistant (dashboard, templates, automações)
 
 ## Arquitetura
 
-`Node(s) ESP32-C3` → `Gateway ESP32-S3` → `bridge.py` → `MQTT` → `Home Assistant`
+`Node(s) ESP32-C3` → `Gateway ESP32-S3/ESP32` → `bridge.py` → `MQTT` → `Home Assistant`
 
 ## Build rápido
 
 - Node:
 	- `cd firmware/node && pio run`
 - Gateway:
-	- `cd firmware/gateway && pio run`
+	- `cd firmware/gateway && pio run -e gateway-c3` (ESP32-C3)
+	- `cd firmware/gateway && pio run -e gateway-s3` (ESP32-S3)
+	- `cd firmware/gateway && pio run -e gateway-esp32-usb` (ESP32 clássico)
+
+Upload (exemplo):
+	- `cd firmware/gateway && pio run -e gateway-esp32-usb -t upload --upload-port /dev/ttyACM1`
 
 ## Bridge
 

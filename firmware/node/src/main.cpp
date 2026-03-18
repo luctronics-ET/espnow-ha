@@ -45,7 +45,15 @@ static uint8_t  s_relay_seen_idx = 0;
 #if defined(CONFIG_IDF_TARGET_ESP32C3)
 #define RELAY_BTN_PIN 9
 #else
-#define RELAY_BTN_PIN 0
+#define RELAY_BTN_PIN 2
+#endif
+#endif
+
+#ifndef RELAY_BTN_ACTIVE_LEVEL
+#if defined(CONFIG_IDF_TARGET_ESP32C3)
+#define RELAY_BTN_ACTIVE_LEVEL LOW
+#else
+#define RELAY_BTN_ACTIVE_LEVEL HIGH
 #endif
 #endif
 
@@ -75,6 +83,10 @@ static uint8_t  s_relay_seen_idx = 0;
 #define RELAY_I2C_ADDR_HD21D 0x40
 #endif
 
+#ifndef RELAY_I2C_CLOCK_HZ
+#define RELAY_I2C_CLOCK_HZ 50000
+#endif
+
 typedef enum {
     RELAY_I2C_NONE = 0,
     RELAY_I2C_SHT3X,
@@ -94,10 +106,19 @@ typedef struct {
 
 static relay_aux_state_t g_relay_aux = {};
 
+static bool relay_led_conflict(void) {
+    return (g_cfg.num_sensors == 0) && (DEFAULT_LED_PIN == RELAY_BTN_PIN);
+}
+
+static bool relay_button_pressed_now(void) {
+    return digitalRead(RELAY_BTN_PIN) == RELAY_BTN_ACTIVE_LEVEL;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 static void led_set(bool on) {
     if (!g_cfg.led_enabled) return;
+    if (relay_led_conflict()) return;
     // GPIO8 is active-low on ESP32-C3 SuperMini
     digitalWrite(DEFAULT_LED_PIN, on ? LOW : HIGH);
 }
@@ -196,19 +217,67 @@ static bool relay_i2c_read_hd21d(float *temp_c, float *hum_pct) {
     return true;
 }
 
+static uint8_t relay_i2c_probe_addr(uint8_t addr) {
+    Wire.beginTransmission(addr);
+    return Wire.endTransmission();
+}
+
+static void relay_i2c_bus_recovery(void) {
+    pinMode(RELAY_I2C_SDA_PIN, INPUT_PULLUP);
+    pinMode(RELAY_I2C_SCL_PIN, INPUT_PULLUP);
+
+    int sda_before = digitalRead(RELAY_I2C_SDA_PIN);
+    int scl_before = digitalRead(RELAY_I2C_SCL_PIN);
+    Serial.printf("I2C idle before recovery: sda=%d scl=%d\n", sda_before, scl_before);
+
+    if (sda_before == HIGH && scl_before == HIGH) {
+        return;
+    }
+
+    // Common I2C recovery: 9 SCL pulses while SDA released, then STOP
+    pinMode(RELAY_I2C_SCL_PIN, OUTPUT_OPEN_DRAIN);
+    digitalWrite(RELAY_I2C_SCL_PIN, HIGH);
+    delayMicroseconds(10);
+    for (int i = 0; i < 9; i++) {
+        digitalWrite(RELAY_I2C_SCL_PIN, LOW);
+        delayMicroseconds(10);
+        digitalWrite(RELAY_I2C_SCL_PIN, HIGH);
+        delayMicroseconds(10);
+    }
+
+    pinMode(RELAY_I2C_SDA_PIN, OUTPUT_OPEN_DRAIN);
+    digitalWrite(RELAY_I2C_SDA_PIN, LOW);
+    delayMicroseconds(10);
+    digitalWrite(RELAY_I2C_SCL_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(RELAY_I2C_SDA_PIN, HIGH);
+    delayMicroseconds(10);
+
+    pinMode(RELAY_I2C_SDA_PIN, INPUT_PULLUP);
+    pinMode(RELAY_I2C_SCL_PIN, INPUT_PULLUP);
+    Serial.printf("I2C idle after recovery: sda=%d scl=%d\n",
+                  digitalRead(RELAY_I2C_SDA_PIN),
+                  digitalRead(RELAY_I2C_SCL_PIN));
+}
+
 static void relay_aux_init(void) {
-    pinMode(RELAY_BTN_PIN, INPUT_PULLUP);
-    g_relay_aux.button_last = (digitalRead(RELAY_BTN_PIN) == LOW);
+    pinMode(RELAY_BTN_PIN, RELAY_BTN_ACTIVE_LEVEL == LOW ? INPUT_PULLUP : INPUT);
+    g_relay_aux.button_last = relay_button_pressed_now();
     g_relay_aux.button_pressed = false;
 
+    relay_i2c_bus_recovery();
+    pinMode(RELAY_I2C_SDA_PIN, INPUT_PULLUP);
+    pinMode(RELAY_I2C_SCL_PIN, INPUT_PULLUP);
     Wire.begin(RELAY_I2C_SDA_PIN, RELAY_I2C_SCL_PIN);
-    Wire.beginTransmission(RELAY_I2C_ADDR_HD21D);
-    if (Wire.endTransmission() == 0) {
+    Wire.setClock(RELAY_I2C_CLOCK_HZ);
+    delay(50);
+    uint8_t err_htu = relay_i2c_probe_addr(RELAY_I2C_ADDR_HD21D);
+    uint8_t err_sht = relay_i2c_probe_addr(RELAY_I2C_ADDR_SHT3X);
+    if (err_htu == 0) {
         g_relay_aux.i2c_ready = true;
         g_relay_aux.i2c_sensor = RELAY_I2C_HD21D;
     } else {
-        Wire.beginTransmission(RELAY_I2C_ADDR_SHT3X);
-        if (Wire.endTransmission() == 0) {
+        if (err_sht == 0) {
             g_relay_aux.i2c_ready = true;
             g_relay_aux.i2c_sensor = RELAY_I2C_SHT3X;
         } else {
@@ -221,11 +290,14 @@ static void relay_aux_init(void) {
                               (g_relay_aux.i2c_sensor == RELAY_I2C_SHT3X) ? "sht3x" : "none";
 
     // I2C bus scan — list all responding addresses for diagnostics
+    Serial.printf("I2C cfg: clock=%luHz probe_0x40=%u probe_0x44=%u\n",
+                  (unsigned long)RELAY_I2C_CLOCK_HZ,
+                  (unsigned)err_htu,
+                  (unsigned)err_sht);
     Serial.printf("I2C scan (sda=%d scl=%d): ", RELAY_I2C_SDA_PIN, RELAY_I2C_SCL_PIN);
     bool i2c_any = false;
     for (uint8_t addr = 1; addr < 127; addr++) {
-        Wire.beginTransmission(addr);
-        if (Wire.endTransmission() == 0) {
+        if (relay_i2c_probe_addr(addr) == 0) {
             Serial.printf("0x%02X ", addr);
             i2c_any = true;
         }
@@ -239,17 +311,20 @@ static void relay_aux_init(void) {
              RELAY_I2C_SCL_PIN,
              sensor_name,
              g_relay_aux.i2c_ready ? "yes" : "no");
-    Serial.printf("RELAY_AUX btn=%d i2c_sda=%d i2c_scl=%d sensor=%s detected=%s\n",
+    Serial.printf("RELAY_AUX btn=%d active=%s i2c_sda=%d i2c_scl=%d sensor=%s detected=%s led_conflict=%s\n",
                   RELAY_BTN_PIN,
+                  RELAY_BTN_ACTIVE_LEVEL == LOW ? "LOW" : "HIGH",
                   RELAY_I2C_SDA_PIN,
                   RELAY_I2C_SCL_PIN,
                   sensor_name,
-                  g_relay_aux.i2c_ready ? "yes" : "no");
+                  g_relay_aux.i2c_ready ? "yes" : "no",
+                  relay_led_conflict() ? "yes" : "no");
 }
 
 static void relay_aux_tick(void) {
     uint32_t now = millis();
     static uint32_t last_keepalive_ms = 0;
+    static int last_btn_raw = -1;
 
     // Periodic HELLO keepalive every 60s — keeps node online in bridge/HA
     if (now - last_keepalive_ms >= 60000) {
@@ -269,7 +344,14 @@ static void relay_aux_tick(void) {
     }
 
     // button: short press -> HELLO, long press (>=5s) -> restart
-    bool pressed = (digitalRead(RELAY_BTN_PIN) == LOW);
+    int raw = digitalRead(RELAY_BTN_PIN);
+    bool pressed = relay_button_pressed_now();
+    if (raw != last_btn_raw) {
+        last_btn_raw = raw;
+        Serial.printf("BTN raw=%d pressed=%d active=%s\n",
+                      raw, pressed ? 1 : 0,
+                      RELAY_BTN_ACTIVE_LEVEL == LOW ? "LOW" : "HIGH");
+    }
     if (pressed && !g_relay_aux.button_last) {
         g_relay_aux.button_press_ms = now;
         g_relay_aux.button_pressed = true;
@@ -467,12 +549,6 @@ void setup(void) {
     Serial.begin(115200);
     delay(200);
 
-    // LED init
-    if (g_cfg.led_enabled || true) {  // init unconditionally, may not be configured yet
-        pinMode(DEFAULT_LED_PIN, OUTPUT);
-        led_set(false);
-    }
-
     // Get node_id from MAC — WiFi.mode() must be called before macAddress()
     uint8_t mac[6];
     WiFi.mode(WIFI_STA);
@@ -494,6 +570,16 @@ void setup(void) {
 
     // Load config from NVS
     nvs_config_load(&g_cfg, node_id);
+
+    // LED init after config load so relay mode can avoid button pin conflicts
+    if (!relay_led_conflict()) {
+        pinMode(DEFAULT_LED_PIN, OUTPUT);
+        led_set(false);
+    } else {
+        ESP_LOGW(TAG, "LED disabled: DEFAULT_LED_PIN=%d conflicts with RELAY_BTN_PIN=%d",
+                 DEFAULT_LED_PIN, RELAY_BTN_PIN);
+        Serial.printf("LED disabled: pin conflict on GPIO%d\n", RELAY_BTN_PIN);
+    }
 
     // Init mesh
     mesh_init();

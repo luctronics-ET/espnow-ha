@@ -265,6 +265,37 @@
         title: "✅ Gateway Aguada online"
         message: "Gateway ESP32 reconectado com sucesso."
 
+# ── BOTÃO RELAY (MQTT binary_sensor ON/OFF) ─────────────────────────────────
+# Entidade criada automaticamente pelo bridge.py (exemplo):
+#   binary_sensor.aguada_dead_button
+# Para não depender de node_id fixo, usamos trigger MQTT com wildcard.
+
+- id: aguada_relay_button_press_any
+  alias: "Aguada: Relay — Botão pressionado (qualquer nó)"
+  trigger:
+    - platform: mqtt
+      topic: "aguada/+/button/state"
+      payload: "ON"
+  action:
+    - service: persistent_notification.create
+      data:
+        notification_id: aguada_relay_button
+        title: "🔘 Relay — Botão"
+        message: >
+          Botão físico do relay pressionado em {{ now().strftime('%d/%m/%Y %H:%M:%S') }}.
+          Tópico: {{ trigger.topic }}
+
+- id: aguada_relay_button_clear_any
+  alias: "Aguada: Relay — Limpar notificação do botão"
+  trigger:
+    - platform: mqtt
+      topic: "aguada/+/button/state"
+      payload: "OFF"
+  action:
+    - service: persistent_notification.dismiss
+      data:
+        notification_id: aguada_relay_button
+
 # ── OTA do Gateway ───────────────────────────────────────────────────────────
 - id: aguada_gateway_ota_error
   alias: "Aguada: Erro OTA no gateway"

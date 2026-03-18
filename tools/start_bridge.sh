@@ -17,7 +17,8 @@ INFLUX_ORG="aguada"
 INFLUX_BUCKET="reservoirs"
 # ── Detect gateway port (by serial MAC 80:F1:B2:50:31:34) ────────────────────
 GATEWAY_PORT=""
-for p in /dev/ttyACM*; do
+for p in /dev/ttyACM* /dev/ttyUSB*; do
+    [[ -e "$p" ]] || continue
     serial=$(udevadm info "$p" 2>/dev/null | grep ID_SERIAL_SHORT | cut -d= -f2)
     if [[ "$serial" == "80:F1:B2:50:31:34" ]]; then
         GATEWAY_PORT="$p"
@@ -26,7 +27,15 @@ for p in /dev/ttyACM*; do
 done
 
 if [[ -z "$GATEWAY_PORT" ]]; then
-    echo "[warn] Gateway not found by serial, using /dev/ttyACM0"
+    for p in /dev/ttyACM* /dev/ttyUSB*; do
+        [[ -e "$p" ]] || continue
+        GATEWAY_PORT="$p"
+        break
+    done
+fi
+
+if [[ -z "$GATEWAY_PORT" ]]; then
+    echo "[warn] Gateway port not found, using /dev/ttyACM0 as fallback"
     GATEWAY_PORT="/dev/ttyACM0"
 fi
 echo "[start] Gateway on $GATEWAY_PORT"

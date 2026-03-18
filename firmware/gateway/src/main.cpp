@@ -19,6 +19,125 @@
 
 static const char *TAG = "gw";
 
+#if defined(LED_BUILTIN)
+static const int GATEWAY_LED_PIN = LED_BUILTIN;
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+static const int GATEWAY_LED_PIN = 8;
+#elif defined(CONFIG_IDF_TARGET_ESP32)
+static const int GATEWAY_LED_PIN = 2;
+#else
+static const int GATEWAY_LED_PIN = -1;
+#endif
+
+// ── LED patterns (non-blocking) ──────────────────────────────────────────────
+typedef struct {
+    uint8_t  blinks;
+    uint16_t on_ms;
+    uint16_t off_ms;
+} led_pattern_t;
+
+#define LED_QUEUE_LEN 24
+static led_pattern_t s_led_q[LED_QUEUE_LEN];
+static uint8_t s_led_q_head = 0;
+static uint8_t s_led_q_tail = 0;
+static bool s_led_active = false;
+static bool s_led_on = false;
+static uint8_t s_led_remaining = 0;
+static uint16_t s_led_on_ms = 0;
+static uint16_t s_led_off_ms = 0;
+static uint32_t s_led_next_ms = 0;
+static uint32_t s_led_last_heartbeat_ms = 0;
+
+static inline bool led_enabled(void) {
+    return GATEWAY_LED_PIN >= 0;
+}
+
+static inline void led_hw_set(bool on) {
+    if (!led_enabled()) return;
+    digitalWrite(GATEWAY_LED_PIN, on ? HIGH : LOW);
+}
+
+static bool led_enqueue(uint8_t blinks, uint16_t on_ms, uint16_t off_ms) {
+    if (!led_enabled() || blinks == 0) return false;
+    uint8_t next = (uint8_t)((s_led_q_head + 1) % LED_QUEUE_LEN);
+    if (next == s_led_q_tail) return false;  // queue full
+    s_led_q[s_led_q_head] = { blinks, on_ms, off_ms };
+    s_led_q_head = next;
+    return true;
+}
+
+static bool led_dequeue(led_pattern_t &out) {
+    if (s_led_q_head == s_led_q_tail) return false;
+    out = s_led_q[s_led_q_tail];
+    s_led_q_tail = (uint8_t)((s_led_q_tail + 1) % LED_QUEUE_LEN);
+    return true;
+}
+
+static void led_start_next(uint32_t now_ms) {
+    if (s_led_active) return;
+    led_pattern_t p;
+    if (!led_dequeue(p)) return;
+    s_led_active = true;
+    s_led_remaining = p.blinks;
+    s_led_on_ms = p.on_ms;
+    s_led_off_ms = p.off_ms;
+    s_led_on = true;
+    led_hw_set(true);
+    s_led_next_ms = now_ms + s_led_on_ms;
+}
+
+static void led_tick(void) {
+    if (!led_enabled()) return;
+
+    uint32_t now = millis();
+    led_start_next(now);
+    if (!s_led_active) return;
+
+    if ((int32_t)(now - s_led_next_ms) < 0) return;
+
+    if (s_led_on) {
+        s_led_on = false;
+        led_hw_set(false);
+        s_led_next_ms = now + s_led_off_ms;
+        return;
+    }
+
+    if (s_led_remaining > 0) s_led_remaining--;
+    if (s_led_remaining == 0) {
+        s_led_active = false;
+        return;
+    }
+
+    s_led_on = true;
+    led_hw_set(true);
+    s_led_next_ms = now + s_led_on_ms;
+}
+
+static inline void led_evt_rx_espnow(void) {
+    // 2 quick blinks: received ESP-NOW packet
+    led_enqueue(2, 55, 70);
+}
+
+static inline void led_evt_tx_server(void) {
+    // 3 quick blinks: JSON sent to bridge/server
+    led_enqueue(3, 40, 55);
+}
+
+static inline void led_evt_boot_sos_short(void) {
+    // Startup marker: 3 quick ("SOS curto")
+    led_enqueue(3, 70, 80);
+}
+
+static void led_heartbeat_tick(void) {
+    if (!led_enabled()) return;
+    uint32_t now = millis();
+    if (s_led_last_heartbeat_ms == 0 || (now - s_led_last_heartbeat_ms) >= 30000UL) {
+        // 1 quick blink every 30s
+        led_enqueue(1, 35, 0);
+        s_led_last_heartbeat_ms = now;
+    }
+}
+
 // ── Timestamp ─────────────────────────────────────────────────────────────────
 // No WiFi/NTP on gateway. bridge.py sends {"cmd":"SETTIME","ts":...} at startup.
 static int64_t s_time_offset_s = 0;
@@ -61,6 +180,7 @@ static void json_out(JsonDocument &doc) {
     serializeJson(doc, Serial);
     Serial.println();
     Serial.flush();
+    led_evt_tx_server();
 }
 
 static void output_sensor(const espnow_packet_t *pkt) {
@@ -234,6 +354,14 @@ void setup(void) {
     Serial.setRxBufferSize(1024);
     delay(300);
 
+    if (led_enabled()) {
+        pinMode(GATEWAY_LED_PIN, OUTPUT);
+        led_hw_set(false);
+        ESP_LOGI(TAG, "LED enabled on pin %d", GATEWAY_LED_PIN);
+    } else {
+        ESP_LOGW(TAG, "No built-in LED pin defined for this target");
+    }
+
     s_pkt_queue = xQueueCreate(PKT_QUEUE_LEN, sizeof(pkt_event_t));
     gw_espnow_init(ESPNOW_CHANNEL, on_recv);
 
@@ -250,12 +378,15 @@ void setup(void) {
     doc["mac"]  = mac_str;
     doc["ts"]   = 0;
     json_out(doc);
+
+    led_evt_boot_sos_short();
 }
 
 void loop(void) {
     // Drain packet queue (filled by ESP-NOW WiFi-task callback).
     pkt_event_t evt;
     while (xQueueReceive(s_pkt_queue, &evt, 0) == pdTRUE) {
+        led_evt_rx_espnow();
         cache_mac(evt.pkt.node_id, evt.src_mac);
         switch (evt.pkt.type) {
             case PKT_SENSOR:    output_sensor(&evt.pkt);    break;
@@ -268,5 +399,7 @@ void loop(void) {
         }
     }
     serial_tick();
+    led_heartbeat_tick();
+    led_tick();
     delay(5);
 }

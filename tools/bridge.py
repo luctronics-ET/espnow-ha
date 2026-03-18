@@ -64,6 +64,17 @@ def calculate(distance_cm: int, cfg: dict) -> dict:
 
     return {"level_cm": level_cm, "pct": pct, "volume_L": volume_L}
 
+
+def ts_to_iso(ts_value) -> str:
+    """Convert unix timestamp (seconds) to ISO-8601 UTC string for HA timestamp sensors."""
+    try:
+        ts = int(ts_value)
+    except Exception:
+        ts = int(time.time())
+    if ts <= 0:
+        ts = int(time.time())
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
+
 # ── MQTT helpers ──────────────────────────────────────────────────────────────
 
 def mqtt_topic_state(node_id: str, sensor_id: int) -> str:
@@ -145,6 +156,16 @@ def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: di
             "sc":   "measurement",
             "icon": "mdi:battery",
         },
+        {
+            "name": f"{name_pfx} - Último dado",
+            "uid":  f"{uid_pfx}_last_update",
+            "oid":  f"aguada_{alias}_last_update",
+            "vt":   "{{ value_json.ts_iso }}",
+            "uom":  None,
+            "dc":   "timestamp",
+            "sc":   None,
+            "icon": "mdi:clock-outline",
+        },
     ]
 
     for e in entities:
@@ -154,13 +175,15 @@ def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: di
             "default_entity_id":   f"sensor.{e['oid']}",
             "state_topic":         state_tp,
             "value_template":      e["vt"],
-            "unit_of_measurement": e["uom"],
-            "state_class":         e["sc"],
             "device":              dev,
             "availability_topic":       avail_tp,
             "payload_available":        "online",
             "payload_not_available":    "offline",
         }
+        if e.get("uom") is not None:
+            payload["unit_of_measurement"] = e["uom"]
+        if e.get("sc"):
+            payload["state_class"] = e["sc"]
         if e["dc"]:
             payload["device_class"] = e["dc"]
         if e["icon"]:
@@ -220,6 +243,27 @@ def publish_relay_discovery(client: mqtt.Client, node_id: str):
         disc_topic = f"homeassistant/sensor/{e['uid']}/config"
         client.publish(disc_topic, json.dumps(payload), retain=True)
         log.debug("Relay Discovery: %s", disc_topic)
+
+    # Button as ON/OFF binary sensor (for HA automations by state trigger)
+    btn_state_payload = {
+        "name":                 f"{dev_name} - Botão",
+        "unique_id":            f"{uid_pfx}_button_state",
+        "default_entity_id":    f"binary_sensor.aguada_{nid_short}_button",
+        "state_topic":          f"aguada/{node_id}/button/state",
+        "payload_on":           "ON",
+        "payload_off":          "OFF",
+        "icon":                 "mdi:gesture-tap-button",
+        "device":               dev,
+        "availability_topic":   avail_tp,
+        "payload_available":    "online",
+        "payload_not_available": "offline",
+    }
+    client.publish(
+        f"homeassistant/binary_sensor/{uid_pfx}_button_state/config",
+        json.dumps(btn_state_payload),
+        retain=True,
+    )
+    log.debug("Relay Button ON/OFF Discovery: homeassistant/binary_sensor/%s_button_state/config", uid_pfx)
 
     # Button — HA event entity (requires HA ≥ 2023.8)
     btn_payload = {
@@ -313,6 +357,14 @@ class NodeTracker:
                 self._client.publish(mqtt_topic_status(node_id), "offline", retain=True)
                 log.warning("Node %s → offline (no data for %ds)", node_id, self._timeout)
 
+    def sync_statuses(self, node_ids: set[str]):
+        """Republish retained status for known nodes on broker reconnect/startup."""
+        for node_id in sorted(node_ids):
+            if node_id in self._online:
+                self._client.publish(mqtt_topic_status(node_id), "online", retain=True)
+            else:
+                self._client.publish(mqtt_topic_status(node_id), "offline", retain=True)
+
 # ── InfluxDB writer ──────────────────────────────────────────────────────────
 
 class InfluxWriter:
@@ -371,6 +423,7 @@ class Bridge:
         if args.mqtt_user:
             self.client.username_pw_set(args.mqtt_user, args.mqtt_password)
         self.tracker = NodeTracker(self.client, args.offline_timeout)
+        self._configured_nodes: set[str] = {node_id for (node_id, _sid) in self.reservoirs.keys()}
         self._discovery_sent: set = set()
         self._influx: InfluxWriter | None = None
         if args.influx_url:
@@ -396,13 +449,40 @@ class Bridge:
         self._known_relays: dict[str, bool] = {}   # node_id → has_env_sensor
         self._relay_discovery_sent: set = set()
         self._env_discovery_sent: set = set()
+        self._button_off_timers: dict[str, threading.Timer] = {}
+
+        # Gateway presence tracking (USB serial + JSON activity)
+        self._gateway_online = False
+        self._gateway_last_seen = 0.0
+        self._gateway_timeout_s = args.gateway_timeout
+
+    def _mark_gateway_seen(self):
+        self._gateway_last_seen = time.time()
+        if not self._gateway_online:
+            self._gateway_online = True
+            self.client.publish("aguada/gateway/status", "online", retain=True)
+            log.info("Gateway → online")
+
+    def _mark_gateway_offline(self, reason: str = ""):
+        if self._gateway_online:
+            self._gateway_online = False
+            self.client.publish("aguada/gateway/status", "offline", retain=True)
+            if reason:
+                log.warning("Gateway → offline (%s)", reason)
+            else:
+                log.warning("Gateway → offline")
 
     # ── MQTT ─────────────────────────────────────────────────────────────────
 
     def _on_mqtt_connect(self, client, userdata, flags, rc):
         if rc == 0:
             log.info("MQTT connected")
-            client.publish("aguada/gateway/status", "online", retain=True)
+            # Keep retained gateway status coherent with current serial liveness.
+            client.publish(
+                "aguada/gateway/status",
+                "online" if self._gateway_online else "offline",
+                retain=True,
+            )
             client.subscribe("aguada/cmd/#")
 
             # Re-publish HA Discovery on every (re)connect to survive broker
@@ -415,6 +495,9 @@ class Bridge:
                 publish_relay_discovery(client, node_id)
                 if has_env:
                     publish_env_discovery(client, node_id)
+            # Prevent stale retained online states after bridge restart.
+            known_nodes = set(self._configured_nodes) | set(self._known_relays.keys())
+            self.tracker.sync_statuses(known_nodes)
         else:
             log.error("MQTT connect failed rc=%d", rc)
 
@@ -441,6 +524,25 @@ class Bridge:
             if self._serial and self._serial.is_open:
                 self._serial.write((line + "\n").encode())
                 log.debug("→ serial: %s", line)
+
+    def _publish_button_state_pulse(self, node_id: str):
+        """Publish button pulse as ON then OFF shortly after, for HA binary_sensor."""
+        topic = f"aguada/{node_id}/button/state"
+        # Rising edge for automations
+        self.client.publish(topic, "ON", retain=True)
+
+        # Debounce/reset: cancel previous OFF timer and schedule a new one
+        prev = self._button_off_timers.get(node_id)
+        if prev is not None:
+            prev.cancel()
+
+        def _set_off():
+            self.client.publish(topic, "OFF", retain=True)
+
+        t = threading.Timer(1.0, _set_off)
+        t.daemon = True
+        t.start()
+        self._button_off_timers[node_id] = t
 
     # ── Message processing ────────────────────────────────────────────────────
 
@@ -486,6 +588,7 @@ class Bridge:
             "seq":         msg.get("seq", 0),
             "ts":          msg.get("ts", int(time.time())),
         }
+        payload["ts_iso"] = ts_to_iso(payload["ts"])
 
         self.client.publish(mqtt_topic_state(node_id, sensor_id), json.dumps(payload), retain=True)
         log.info("%-6s dist=%3dcm  level=%3dcm  pct=%5.1f%%  vol=%dL",
@@ -559,6 +662,7 @@ class Bridge:
                         "seq":         msg.get("seq", 0),
                         "ts":          msg.get("ts", int(time.time())),
                     }
+                    payload["ts_iso"] = ts_to_iso(payload["ts"])
                     self.client.publish(mqtt_topic_state(node_id, sensor_id),
                                        json.dumps(payload), retain=True)
                     log.debug("HEARTBEAT update: %s dist=%dcm", cfg.get("alias"), distance_cm)
@@ -587,10 +691,13 @@ class Bridge:
                 publish_relay_discovery(self.client, node_id)
                 self._relay_discovery_sent.add(node_id)
                 self._known_relays.setdefault(node_id, False)
+                # Ensure known default state for HA binary_sensor
+                self.client.publish(f"aguada/{node_id}/button/state", "OFF", retain=True)
 
             # FLAG_BTN_HELLO = 0x40: button press (not boot)
             if flags & 0x40:
                 log.info("HELLO %s — button press event", node_id)
+                self._publish_button_state_pulse(node_id)
                 btn_payload = {"event_type": "press", "ts": msg.get("ts", int(time.time()))}
                 self.client.publish(f"aguada/{node_id}/button", json.dumps(btn_payload), retain=False)
         else:
@@ -604,6 +711,7 @@ class Bridge:
 
     def _handle_gateway_ready(self, msg: dict):
         log.info("Gateway ready: mac=%s fw=%s", msg.get("mac"), msg.get("fw"))
+        self._mark_gateway_seen()
         # Send current time to gateway
         self._serial_write(json.dumps({"cmd": "SETTIME", "ts": int(time.time())}))
 
@@ -613,6 +721,9 @@ class Bridge:
         except Exception:
             log.debug("Non-JSON line: %s", line[:80])
             return
+
+        # Any valid JSON from serial means gateway is alive
+        self._mark_gateway_seen()
 
         t = msg.get("type", "")
         if   t == "SENSOR":         self._handle_sensor(msg)
@@ -633,6 +744,16 @@ class Bridge:
         log.info("Opening %s @ %d baud", self.args.port, self.args.baud)
         ser = serial.Serial(self.args.port, self.args.baud, timeout=1)
         self._serial = ser
+        # Some USB-CDC boards do not auto-reset reliably on open.
+        # Force a short DTR pulse so the gateway always reboots and sends GATEWAY_READY.
+        try:
+            ser.setDTR(False)
+            time.sleep(0.15)
+            ser.setDTR(True)
+            log.debug("Serial DTR pulse applied")
+        except Exception as e:
+            log.debug("DTR pulse skipped: %s", e)
+        self._mark_gateway_seen()
         log.info("Waiting 3s for gateway boot...")
         time.sleep(3)
 
@@ -645,6 +766,7 @@ class Bridge:
                     line = ser.readline().decode(errors="replace").strip()
                 except serial.SerialException as e:
                     log.error("Serial error: %s", e)
+                    self._mark_gateway_offline("serial error")
                     time.sleep(2)
                     continue
 
@@ -656,11 +778,14 @@ class Bridge:
                 now = time.time()
                 if now - last_timeout_check > 30:
                     self.tracker.check_timeouts()
+                    if self._gateway_timeout_s > 0 and self._gateway_online and (now - self._gateway_last_seen > self._gateway_timeout_s):
+                        self._mark_gateway_offline(f"no serial data for {self._gateway_timeout_s}s")
                     last_timeout_check = now
 
         except KeyboardInterrupt:
             log.info("Stopping.")
         finally:
+            self._mark_gateway_offline("bridge stopping")
             ser.close()
             self.client.loop_stop()
             self.client.disconnect()
@@ -680,6 +805,8 @@ def main():
     parser.add_argument("--mqtt-password",   default="")
     parser.add_argument("--offline-timeout", default=300, type=int,
                         help="Seconds without data before node is marked offline")
+    parser.add_argument("--gateway-timeout", default=0, type=int,
+                        help="Seconds without serial JSON before gateway is marked offline (0=disable timeout)")
     parser.add_argument("--influx-url",    default="",            help="InfluxDB 2.x URL (ex: http://localhost:8086). Omita para desativar.")
     parser.add_argument("--influx-token",  default="",            help="InfluxDB API token")
     parser.add_argument("--influx-org",    default="aguada",      help="InfluxDB org")

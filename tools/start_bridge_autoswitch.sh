@@ -86,8 +86,26 @@ ensure_bridge_target() {
     return 0
   fi
 
-  pkill -f "python.*bridge.py --port $SERIAL_PORT" || true
+  # Ensure only one bridge instance exists (prevents stale process on old USB port)
+  pkill -f "python.*bridge.py" || true
   sleep 1
+
+  # InfluxDB is optional: only pass --influx-* when influxdb-client is installed
+  local INFLUX_ARGS=()
+  if "$VENV_PY" - <<'PY' >/dev/null 2>&1
+import importlib.util
+raise SystemExit(0 if importlib.util.find_spec('influxdb_client') else 1)
+PY
+  then
+    INFLUX_ARGS=(
+      --influx-url "$INFLUX_URL"
+      --influx-token "$INFLUX_TOKEN"
+      --influx-org "$INFLUX_ORG"
+      --influx-bucket "$INFLUX_BUCKET"
+    )
+  else
+    echo "[$(date '+%F %T')] influxdb-client not found; starting bridge without Influx" >> "$SWITCH_LOG"
+  fi
 
   nohup "$VENV_PY" "$BRIDGE" \
     --port "$SERIAL_PORT" \
@@ -95,10 +113,7 @@ ensure_bridge_target() {
     --mqtt-port "$REMOTE_PORT" \
     --mqtt-user "$MQTT_USER" \
     --mqtt-password "$MQTT_PASS" \
-    --influx-url "$INFLUX_URL" \
-    --influx-token "$INFLUX_TOKEN" \
-    --influx-org "$INFLUX_ORG" \
-    --influx-bucket "$INFLUX_BUCKET" \
+    "${INFLUX_ARGS[@]}" \
     --debug > "$BRIDGE_LOG" 2>&1 &
 
   echo "[$(date '+%F %T')] bridge started pid=$! target=$target_host" >> "$SWITCH_LOG"
