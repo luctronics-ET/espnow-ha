@@ -82,14 +82,16 @@ static void output_sensor(const espnow_packet_t *pkt) {
 static void output_heartbeat(const espnow_packet_t *pkt) {
     JsonDocument doc;
     char nid[8]; snprintf(nid, sizeof(nid), "0x%04X", pkt->node_id);
-    doc["v"]         = 3;
-    doc["type"]      = "HEARTBEAT";
-    doc["node_id"]   = nid;
-    doc["sensor_id"] = pkt->sensor_id;
-    doc["distance_cm"] = (int)pkt->distance_cm;  // Última distância válida
-    doc["rssi"]      = pkt->rssi;
-    doc["seq"]       = pkt->seq;
-    doc["ts"]        = unix_now();
+    doc["v"]           = 3;
+    doc["type"]        = "HEARTBEAT";
+    doc["node_id"]     = nid;
+    doc["sensor_id"]   = pkt->sensor_id;
+    doc["distance_cm"] = (int)pkt->distance_cm;
+    doc["rssi"]        = pkt->rssi;
+    doc["vbat"]        = pkt->vbat;
+    doc["reserved"]    = pkt->reserved;  // used by SENSOR_ID_ENV: humidity 0-100
+    doc["seq"]         = pkt->seq;
+    doc["ts"]          = unix_now();
     json_out(doc);
 }
 
@@ -102,6 +104,9 @@ static void output_hello(const espnow_packet_t *pkt) {
     doc["fw_version"]  = FW_VERSION;
     // distance_cm reused to carry num_sensors in HELLO
     doc["num_sensors"] = pkt->distance_cm;
+    doc["rssi"]        = pkt->rssi;
+    doc["vbat"]        = pkt->vbat;
+    doc["flags"]       = pkt->flags;  // FLAG_BTN_HELLO=0x40 indicates button press
     doc["ts"]          = unix_now();
     json_out(doc);
 }

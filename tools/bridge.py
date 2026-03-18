@@ -170,6 +170,124 @@ def publish_discovery(client: mqtt.Client, node_id: str, sensor_id: int, cfg: di
         client.publish(disc_topic, json.dumps(payload), retain=True)
         log.debug("Discovery: %s", disc_topic)
 
+
+def publish_relay_discovery(client: mqtt.Client, node_id: str):
+    """Publish HA MQTT Discovery for a relay node: RSSI, battery, button event."""
+    nid_short = node_id.replace("0X", "").replace("0x", "").lower()
+    uid_pfx   = f"aguada_relay_{nid_short}"
+    dev_name  = f"Relay {node_id}"
+    dev       = {"name": dev_name, "identifiers": [uid_pfx], "manufacturer": "Aguada", "model": "ESP32-C3 Relay"}
+    state_tp  = f"aguada/{node_id}/relay/state"
+    avail_tp  = mqtt_topic_status(node_id)
+
+    sensors = [
+        {
+            "name": f"{dev_name} - RSSI",
+            "uid":  f"{uid_pfx}_rssi",
+            "vt":   "{{ value_json.rssi }}",
+            "uom":  "dBm",
+            "dc":   "signal_strength",
+            "sc":   "measurement",
+            "icon": "mdi:wifi",
+        },
+        {
+            "name": f"{dev_name} - Bateria",
+            "uid":  f"{uid_pfx}_bateria",
+            "vt":   "{{ value_json.vbat }}",
+            "uom":  "V",
+            "dc":   "voltage",
+            "sc":   "measurement",
+            "icon": "mdi:battery",
+        },
+    ]
+
+    for e in sensors:
+        payload = {
+            "name":                e["name"],
+            "unique_id":           e["uid"],
+            "state_topic":         state_tp,
+            "value_template":      e["vt"],
+            "unit_of_measurement": e["uom"],
+            "state_class":         e["sc"],
+            "device_class":        e["dc"],
+            "device":              dev,
+            "availability_topic":      avail_tp,
+            "payload_available":       "online",
+            "payload_not_available":   "offline",
+        }
+        if e.get("icon"):
+            payload["icon"] = e["icon"]
+        disc_topic = f"homeassistant/sensor/{e['uid']}/config"
+        client.publish(disc_topic, json.dumps(payload), retain=True)
+        log.debug("Relay Discovery: %s", disc_topic)
+
+    # Button — HA event entity (requires HA ≥ 2023.8)
+    btn_payload = {
+        "name":                 f"{dev_name} - Botão",
+        "unique_id":            f"{uid_pfx}_button",
+        "state_topic":          f"aguada/{node_id}/button",
+        "event_types":          ["press"],
+        "device":               dev,
+        "availability_topic":   avail_tp,
+        "payload_available":    "online",
+        "payload_not_available": "offline",
+        "icon":                 "mdi:button-pointer",
+    }
+    client.publish(f"homeassistant/event/{uid_pfx}_button/config", json.dumps(btn_payload), retain=True)
+    log.debug("Relay Button Discovery: homeassistant/event/%s_button/config", uid_pfx)
+
+
+def publish_env_discovery(client: mqtt.Client, node_id: str):
+    """Publish HA MQTT Discovery for relay I2C env sensor (temp + humidity)."""
+    nid_short = node_id.replace("0X", "").replace("0x", "").lower()
+    uid_pfx   = f"aguada_relay_{nid_short}"
+    dev_name  = f"Relay {node_id}"
+    dev       = {"name": dev_name, "identifiers": [uid_pfx], "manufacturer": "Aguada", "model": "ESP32-C3 Relay"}
+    state_tp  = f"aguada/{node_id}/env/state"
+    avail_tp  = mqtt_topic_status(node_id)
+
+    sensors = [
+        {
+            "name": f"{dev_name} - Temperatura",
+            "uid":  f"{uid_pfx}_temp",
+            "vt":   "{{ value_json.temp_c }}",
+            "uom":  "°C",
+            "dc":   "temperature",
+            "sc":   "measurement",
+            "icon": "mdi:thermometer",
+        },
+        {
+            "name": f"{dev_name} - Umidade",
+            "uid":  f"{uid_pfx}_hum",
+            "vt":   "{{ value_json.hum_pct }}",
+            "uom":  "%",
+            "dc":   "humidity",
+            "sc":   "measurement",
+            "icon": "mdi:water-percent",
+        },
+    ]
+
+    for e in sensors:
+        payload = {
+            "name":                e["name"],
+            "unique_id":           e["uid"],
+            "state_topic":         state_tp,
+            "value_template":      e["vt"],
+            "unit_of_measurement": e["uom"],
+            "state_class":         e["sc"],
+            "device_class":        e["dc"],
+            "device":              dev,
+            "availability_topic":      avail_tp,
+            "payload_available":       "online",
+            "payload_not_available":   "offline",
+        }
+        if e.get("icon"):
+            payload["icon"] = e["icon"]
+        disc_topic = f"homeassistant/sensor/{e['uid']}/config"
+        client.publish(disc_topic, json.dumps(payload), retain=True)
+        log.debug("Env Discovery: %s", disc_topic)
+
+
 # ── Online/offline tracking ───────────────────────────────────────────────────
 
 class NodeTracker:
@@ -270,6 +388,14 @@ class Bridge:
 
         self._serial: serial.Serial | None = None
         self._serial_lock = threading.Lock()
+        # Dedup cache: (node_id, sensor_id, seq) → timestamp
+        # Prevents double-publish when same packet arrives via relay AND direct
+        self._seen_seq: dict[tuple, float] = {}
+        self._seen_seq_ttl = 120.0  # seconds
+        # Relay / env discovery tracking
+        self._known_relays: dict[str, bool] = {}   # node_id → has_env_sensor
+        self._relay_discovery_sent: set = set()
+        self._env_discovery_sent: set = set()
 
     # ── MQTT ─────────────────────────────────────────────────────────────────
 
@@ -284,6 +410,11 @@ class Bridge:
             for (node_id, sensor_id), cfg in self.reservoirs.items():
                 publish_discovery(client, node_id, sensor_id, cfg)
                 self._discovery_sent.add((node_id, sensor_id))
+            # Re-publish relay/env discovery for known relay nodes
+            for node_id, has_env in self._known_relays.items():
+                publish_relay_discovery(client, node_id)
+                if has_env:
+                    publish_env_discovery(client, node_id)
         else:
             log.error("MQTT connect failed rc=%d", rc)
 
@@ -317,6 +448,18 @@ class Bridge:
         node_id   = msg["node_id"].upper()
         sensor_id = int(msg["sensor_id"])
         key       = (node_id, sensor_id)
+
+        # Deduplicate: same packet may arrive via relay AND direct path
+        seq_key = (node_id, sensor_id, msg.get("seq", -1))
+        now = time.time()
+        if seq_key in self._seen_seq:
+            log.debug("Dedup: skip duplicate %s sensor=%d seq=%s", node_id, sensor_id, msg.get("seq"))
+            return
+        self._seen_seq[seq_key] = now
+        # Purge old entries
+        if len(self._seen_seq) > 512:
+            cutoff = now - self._seen_seq_ttl
+            self._seen_seq = {k: v for k, v in self._seen_seq.items() if v > cutoff}
 
         self.tracker.seen(node_id)
 
@@ -353,16 +496,54 @@ class Bridge:
             self._influx.write_sensor(node_id, sensor_id, cfg.get("alias", ""), payload)
 
     def _handle_heartbeat(self, msg: dict):
-        node_id = msg["node_id"].upper()
+        node_id   = msg["node_id"].upper()
         sensor_id = int(msg.get("sensor_id", 0))
         self.tracker.seen(node_id)
-        log.debug("HEARTBEAT %s/%d seq=%s dist=%s", node_id, sensor_id, 
+
+        # SENSOR_ID_ENV (0xFE): relay I2C env telemetry
+        # Encoding: distance_cm = (int)(temp_c*10)+1000, reserved = humidity%
+        if sensor_id == 0xFE:
+            raw_temp = int(msg.get("distance_cm", 1000))
+            hum_pct  = int(msg.get("reserved", 0))
+            temp_c   = round((raw_temp - 1000) / 10.0, 1)
+            vbat_raw = msg.get("vbat", -1)
+            vbat     = round(vbat_raw / 10.0, 1) if vbat_raw != -1 else None
+            ts       = msg.get("ts", int(time.time()))
+
+            env_payload = {
+                "temp_c":  temp_c,
+                "hum_pct": hum_pct,
+                "rssi":    msg.get("rssi", 0),
+                "vbat":    vbat,
+                "ts":      ts,
+            }
+            self.client.publish(f"aguada/{node_id}/env/state", json.dumps(env_payload), retain=True)
+            log.info("ENV    %-6s  T=%5.1f°C  H=%3d%%  rssi=%d",
+                     node_id, temp_c, hum_pct, msg.get("rssi", 0))
+
+            # Also refresh relay state (has fresh rssi/vbat)
+            relay_payload = {"rssi": msg.get("rssi", 0), "vbat": vbat,
+                             "seq": msg.get("seq", 0), "ts": ts}
+            self.client.publish(f"aguada/{node_id}/relay/state", json.dumps(relay_payload), retain=True)
+
+            # Publish discovery on first env packet (relay may not be in reservoirs.yaml)
+            if node_id not in self._relay_discovery_sent:
+                publish_relay_discovery(self.client, node_id)
+                self._relay_discovery_sent.add(node_id)
+                self._known_relays[node_id] = True
+            if node_id not in self._env_discovery_sent:
+                publish_env_discovery(self.client, node_id)
+                self._env_discovery_sent.add(node_id)
+                self._known_relays[node_id] = True
+            return
+
+        log.debug("HEARTBEAT %s/%d seq=%s dist=%s", node_id, sensor_id,
                   msg.get("seq"), msg.get("distance_cm"))
-        
-        # Se heartbeat inclui distância, atualizar estado (mantém HA atualizado)
-        if "distance_cm" in msg and sensor_id > 0:
+
+        # Regular heartbeat from sensor node: update sensor state if distance valid
+        if "distance_cm" in msg and 0 < sensor_id < 0xFE:
             distance_cm = msg["distance_cm"]
-            if distance_cm > 0:  # Se distância válida
+            if distance_cm > 0:
                 key = (node_id, sensor_id)
                 cfg = self.reservoirs.get(key)
                 if cfg:
@@ -378,24 +559,48 @@ class Bridge:
                         "seq":         msg.get("seq", 0),
                         "ts":          msg.get("ts", int(time.time())),
                     }
-                    self.client.publish(mqtt_topic_state(node_id, sensor_id), 
+                    self.client.publish(mqtt_topic_state(node_id, sensor_id),
                                        json.dumps(payload), retain=True)
                     log.debug("HEARTBEAT update: %s dist=%dcm", cfg.get("alias"), distance_cm)
 
     def _handle_hello(self, msg: dict):
-        node_id = msg["node_id"].upper()
+        node_id   = msg["node_id"].upper()
+        num       = int(msg.get("num_sensors", 0))
+        flags     = int(msg.get("flags", 0))
+        vbat_raw  = msg.get("vbat", -1)
+        vbat      = round(vbat_raw / 10.0, 1) if vbat_raw != -1 else None
         self.tracker.seen(node_id)
-        log.info("HELLO %s num_sensors=%s fw=%s",
-                 node_id, msg.get("num_sensors"), msg.get("fw_version"))
+        log.info("HELLO %s num_sensors=%d flags=0x%02x fw=%s",
+                 node_id, num, flags, msg.get("fw_version"))
 
-        # Publish HA Discovery for all sensors of this node
-        num = int(msg.get("num_sensors", 0))
-        for sid in range(1, num + 1):
-            key = (node_id, sid)
-            cfg = self.reservoirs.get(key)
-            if cfg and key not in self._discovery_sent:
-                publish_discovery(self.client, node_id, sid, cfg)
-                self._discovery_sent.add(key)
+        if num == 0:
+            # Relay node — publish relay state and Discovery
+            relay_payload = {
+                "rssi": msg.get("rssi", 0),
+                "vbat": vbat,
+                "seq":  msg.get("seq", 0),
+                "ts":   msg.get("ts", int(time.time())),
+            }
+            self.client.publish(f"aguada/{node_id}/relay/state", json.dumps(relay_payload), retain=True)
+
+            if node_id not in self._relay_discovery_sent:
+                publish_relay_discovery(self.client, node_id)
+                self._relay_discovery_sent.add(node_id)
+                self._known_relays.setdefault(node_id, False)
+
+            # FLAG_BTN_HELLO = 0x40: button press (not boot)
+            if flags & 0x40:
+                log.info("HELLO %s — button press event", node_id)
+                btn_payload = {"event_type": "press", "ts": msg.get("ts", int(time.time()))}
+                self.client.publish(f"aguada/{node_id}/button", json.dumps(btn_payload), retain=False)
+        else:
+            # Sensor node — publish reservoir Discovery
+            for sid in range(1, num + 1):
+                key = (node_id, sid)
+                cfg = self.reservoirs.get(key)
+                if cfg and key not in self._discovery_sent:
+                    publish_discovery(self.client, node_id, sid, cfg)
+                    self._discovery_sent.add(key)
 
     def _handle_gateway_ready(self, msg: dict):
         log.info("Gateway ready: mac=%s fw=%s", msg.get("mac"), msg.get("fw"))

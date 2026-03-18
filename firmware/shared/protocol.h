@@ -30,12 +30,18 @@
 #define PKT_ACK             0x20
 
 // Flags bitmask
-#define FLAG_IS_RELAY       (1 << 0)
-#define FLAG_OTA_PENDING    (1 << 1)
-#define FLAG_SENSOR_ERROR   (1 << 2)
-#define FLAG_LOW_BATTERY    (1 << 3)
-#define FLAG_CONFIG_PENDING (1 << 4)
+#define FLAG_IS_RELAY        (1 << 0)
+#define FLAG_OTA_PENDING     (1 << 1)
+#define FLAG_SENSOR_ERROR    (1 << 2)
+#define FLAG_LOW_BATTERY     (1 << 3)
+#define FLAG_CONFIG_PENDING  (1 << 4)
 #define FLAG_CFG_NUM_SENSORS (1 << 5)  // CMD_CONFIG carries num_sensors in distance_cm high byte
+#define FLAG_BTN_HELLO       (1 << 6)  // HELLO sent by button press (not boot)
+
+// Special sensor_id values
+#define SENSOR_ID_ENV        0xFE      // HEARTBEAT carrying relay I2C env data:
+                                       //   distance_cm = (int)(temp_c*10)+1000
+                                       //   reserved    = humidity % (0-100)
 
 #define DISTANCE_ERROR      0xFFFF
 

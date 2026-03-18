@@ -33,7 +33,8 @@ static uint16_t      g_seq = 0;
 // Deferred config-save flag — set in ESP-NOW callback, processed in loop()
 static volatile bool g_config_save_pending = false;
 
-static void send_hello(void);
+static void send_hello(bool from_button = false);
+static void send_relay_env(float temp_c, float hum_pct);
 
 // Relay mode: track seen seq numbers to avoid re-forwarding duplicates
 #define RELAY_SEEN_SIZE 32
@@ -262,7 +263,7 @@ static void relay_aux_tick(void) {
             esp_restart();
         } else if (dt >= 40) {
             ESP_LOGI(TAG, "Relay button short-press (%lums): HELLO", (unsigned long)dt);
-            send_hello();
+            send_hello(true);
         }
     }
     g_relay_aux.button_last = pressed;
@@ -281,6 +282,7 @@ static void relay_aux_tick(void) {
         if (ok) {
             const char *sensor_name = (g_relay_aux.i2c_sensor == RELAY_I2C_HD21D) ? "HD21D" : "SHT3x";
             ESP_LOGI(TAG, "Relay I2C %s: T=%.1fC RH=%.1f%%", sensor_name, temp_c, hum);
+            send_relay_env(temp_c, hum);
         } else {
             ESP_LOGW(TAG, "Relay I2C read failed");
         }
@@ -312,7 +314,7 @@ static void send_packet(uint8_t type, uint8_t sensor_id, uint16_t distance_cm, u
     ESP_LOGI(TAG, "TX type=0x%02X sid=%d dist=%d seq=%d", type, sensor_id, distance_cm, pkt.seq - 1);
 }
 
-static void send_hello(void) {
+static void send_hello(bool from_button) {
     espnow_packet_t pkt = {};
     pkt.version     = PROTO_VERSION;
     pkt.type        = PKT_HELLO;
@@ -322,8 +324,28 @@ static void send_hello(void) {
     pkt.seq         = g_seq++;
     pkt.distance_cm = g_cfg.num_sensors;  // reuse field to carry num_sensors in HELLO
     pkt.vbat        = read_vbat();
+    if (from_button) pkt.flags |= FLAG_BTN_HELLO;
     espnow_send(&pkt);
-    ESP_LOGI(TAG, "TX HELLO node_id=0x%04X num_sensors=%d", g_cfg.node_id, g_cfg.num_sensors);
+    ESP_LOGI(TAG, "TX HELLO node_id=0x%04X num_sensors=%d btn=%d", g_cfg.node_id, g_cfg.num_sensors, from_button);
+}
+
+// Send relay I2C env telemetry as a HEARTBEAT with sensor_id=SENSOR_ID_ENV.
+// Encoding: distance_cm = (int)(temp_c*10)+1000, reserved = hum% (uint8).
+static void send_relay_env(float temp_c, float hum_pct) {
+    espnow_packet_t pkt = {};
+    pkt.version     = PROTO_VERSION;
+    pkt.type        = PKT_HEARTBEAT;
+    pkt.node_id     = g_cfg.node_id;
+    pkt.sensor_id   = SENSOR_ID_ENV;
+    pkt.ttl         = g_cfg.ttl_max;
+    pkt.seq         = g_seq++;
+    int enc = (int)(temp_c * 10.0f) + 1000;
+    pkt.distance_cm = (uint16_t)(enc < 0 ? 0 : enc > 65000 ? 65000 : enc);
+    float h = hum_pct < 0.0f ? 0.0f : hum_pct > 100.0f ? 100.0f : hum_pct;
+    pkt.reserved    = (uint8_t)h;
+    pkt.vbat        = read_vbat();
+    espnow_send(&pkt);
+    ESP_LOGI(TAG, "TX ENV T=%.1f H=%.0f enc=%u hum=%u", temp_c, hum_pct, pkt.distance_cm, pkt.reserved);
 }
 
 // ── Receive callback ──────────────────────────────────────────────────────────
