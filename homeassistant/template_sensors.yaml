@@ -35,7 +35,7 @@
         {% set cbif = states('sensor.aguada_cbif_volume') | float(0) %}
         {{ ((con + cav + cb31 + cb32 + cie1 + cie2 + cbif) / 1000) | round(1) }}
 
-    - name: "Aguada Volume Total %"
+    - name: "Aguada Volume Total Pct"
       unique_id: aguada_volume_total_pct
       unit_of_measurement: "%"
       state_class: measurement
@@ -360,7 +360,7 @@
       state: >
         {{ states('input_number.aguada_cbif1_volume_manual') | float(0) | round(0) | int }}
 
-    - name: "Aguada CBIF1 Volume Pct"
+    - name: "Aguada CBIF1 Pct"
       unique_id: aguada_cbif1_pct
       unit_of_measurement: "%"
       state_class: measurement
@@ -376,7 +376,7 @@
       state: >
         {{ states('input_number.aguada_cbif2_volume_manual') | float(0) | round(0) | int }}
 
-    - name: "Aguada CBIF2 Volume Pct"
+    - name: "Aguada CBIF2 Pct"
       unique_id: aguada_cbif2_pct
       unit_of_measurement: "%"
       state_class: measurement
@@ -394,7 +394,7 @@
         {% set cbif2 = states('input_number.aguada_cbif2_volume_manual') | float(0) %}
         {{ (cbif1 + cbif2) | round(0) | int }}
 
-    - name: "Aguada CBIF Volume Pct"
+    - name: "Aguada CBIF Pct"
       unique_id: aguada_cbif_pct
       unit_of_measurement: "%"
       state_class: measurement
@@ -449,7 +449,7 @@
         {% set b = states('input_number.aguada_hidro_av_anterior') | float(0) %}
         {{ [a - b, 0] | max | round(2) }}
 
-    - name: "Aguada Hidro AV|AZ Delta"
+    - name: "Aguada Hidro AVAZ Delta"
       unique_id: aguada_hidro_avaz_delta
       unit_of_measurement: "m³"
       state_class: measurement
