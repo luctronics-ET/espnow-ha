@@ -69,16 +69,15 @@ recorder:
 #   Vá em Configurações > Dashboards > Adicionar dashboard (YAML)
 #   e use o arquivo: dashboard.yaml
 
-# OPÇÃO B — YAML global
-# lovelace:
-#   mode: yaml
-#   dashboards:
-#     aguada-v3:
-#       mode: yaml
-#       title: Aguada V3
-#       icon: mdi:water
-#       show_in_sidebar: true
-#       filename: dashboard.yaml
+# OPÇÃO B — YAML global (ativo — adiciona sidebar "Aguada V3" sem afetar outros dashes)
+lovelace:
+  dashboards:
+    aguada-v3:
+      mode: yaml
+      title: Aguada V3
+      icon: mdi:water
+      show_in_sidebar: true
+      filename: dashboard.yaml
 
 # ---------------------------------------------------------------------------
 # Troubleshooting
