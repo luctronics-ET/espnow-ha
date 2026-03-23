@@ -265,7 +265,7 @@
         timeAgo(ts) {
           if (!ts) return '—';
           const now = new Date();
-          const then = new Date(ts);
+          const then = new Date(ts * 1000);
           const diffSec = Math.floor((now - then) / 1000);
           if (diffSec < 60) return `${diffSec}s atrás`;
           const diffMin = Math.floor(diffSec / 60);

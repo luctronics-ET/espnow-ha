@@ -244,9 +244,8 @@
           // Aggregate by hour
           const hourMap = {};
           for (const ev of this.events) {
-            const ts = ev.ts || ev.hora;
-            if (!ts) continue;
-            const h = new Date(ts).getHours();
+            const h = parseInt(ev.hour);
+            if (isNaN(h)) continue;
             const key = String(h).padStart(2,'0') + ':00';
             hourMap[key] = (hourMap[key] || 0) + (ev.delta_l || 0);
           }

@@ -196,7 +196,7 @@
           const textColor = isDark ? '#9ca3af' : '#6b7280';
 
           const labels = this.rows.map(r => {
-            const d = new Date(r.ts);
+            const d = new Date(r.ts * 1000);
             return d.toLocaleString('pt-BR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
           });
           const data = this.rows.map(r => r.volume_l !== null && r.volume_l !== undefined ? Math.round(r.volume_l) : null);
