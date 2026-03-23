@@ -30,7 +30,7 @@ def calc_consumption_events(readings: list[dict], date: str) -> list[dict]:
     """
     buckets: dict[int, list[dict]] = defaultdict(list)
     for r in readings:
-        hour = datetime.datetime.fromtimestamp(r["ts"]).hour
+        hour = datetime.datetime.fromtimestamp(r["ts"], tz=datetime.timezone.utc).hour
         buckets[hour].append(r)
 
     events = []
@@ -73,7 +73,8 @@ def decimate_readings(readings: list[dict], max_points: int = 500) -> list[dict]
         if not bucket:
             continue
         mid = bucket[len(bucket) // 2]
-        avg_volume = sum(r["volume_l"] for r in bucket) / len(bucket)
+        vol_vals = [r["volume_l"] for r in bucket if r.get("volume_l") is not None]
+        avg_volume = sum(vol_vals) / len(vol_vals) if vol_vals else 0.0
         level_vals = [r["level_cm"] for r in bucket if r.get("level_cm") is not None]
         pct_vals = [r["pct"] for r in bucket if r.get("pct") is not None]
         avg_level = sum(level_vals) / len(level_vals) if level_vals else 0.0

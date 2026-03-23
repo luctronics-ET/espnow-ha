@@ -61,3 +61,10 @@ def test_decimate_reduces_to_max_points():
                 for i in range(1000)]
     result = decimate_readings(readings, max_points=500)
     assert len(result) <= 500
+
+def test_decimate_handles_missing_volume_l():
+    readings = [{"ts": i, "level_cm": float(i), "pct": i * 0.1} for i in range(1000)]
+    # não deve levantar KeyError
+    result = decimate_readings(readings, max_points=500)
+    assert len(result) <= 500
+    assert all(r["volume_l"] == 0.0 for r in result)
