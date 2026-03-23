@@ -132,9 +132,11 @@ async def get_history_route(alias: str, period: str = "24h"):
 
 @app.get("/api/consumption")
 async def get_consumption(
-    alias: str = Query(...),
-    date: str = Query(...),
+    alias: Optional[str] = Query(None),
+    date: Optional[str] = Query(None),
 ):
+    if alias is None or date is None:
+        raise HTTPException(400, "alias e date são obrigatórios")
     async with aiosqlite.connect(DB_PATH) as conn:
         conn.row_factory = aiosqlite.Row
         readings = await get_readings_for_date(conn, alias=alias.upper(), date_str=date)

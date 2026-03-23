@@ -47,7 +47,28 @@ async def test_consumption_missing_params(set_test_db):
         await init_db(conn)
     async with AsyncClient(transport=ASGITransport(app=m.app), base_url="http://test") as client:
         r = await client.get("/api/consumption?alias=CON")
-    assert r.status_code == 422
+    assert r.status_code == 400
+
+
+def test_ws_snapshot(set_test_db):
+    import asyncio
+    import backend.main as m
+    from starlette.testclient import TestClient
+
+    asyncio.get_event_loop().run_until_complete(
+        _init_db_for_ws(m.DB_PATH)
+    )
+    with TestClient(m.app) as client:
+        with client.websocket_connect("/ws") as ws:
+            msg = ws.receive_json()
+    assert msg["type"] == "snapshot"
+    assert isinstance(msg["data"], list)
+
+
+async def _init_db_for_ws(db_path):
+    async with aiosqlite.connect(db_path) as conn:
+        conn.row_factory = aiosqlite.Row
+        await init_db(conn)
 
 
 @pytest.mark.asyncio
