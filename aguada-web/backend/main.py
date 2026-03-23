@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
     async with aiosqlite.connect(DB_PATH) as conn:
         await init_db(conn)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     ws_manager.set_loop(loop)
 
     bridge = Bridge(db_path=DB_PATH, notify_cb=ws_manager.broadcast)
@@ -187,8 +187,9 @@ async def get_report_pdf(date: str = Query(...)):
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
-    await ws_manager.connect(ws)
+    await ws.accept()
     await ws_manager.send_snapshot(ws)
+    ws_manager._clients.append(ws)
     try:
         while True:
             await ws.receive_text()
