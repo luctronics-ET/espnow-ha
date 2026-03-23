@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS reservoir_state (
 async def init_db(conn: aiosqlite.Connection) -> None:
     await conn.executescript(SCHEMA)
     await conn.commit()
+    conn.row_factory = aiosqlite.Row
 
 
 async def insert_reading(conn: aiosqlite.Connection, r: dict) -> None:
@@ -62,8 +63,10 @@ async def upsert_state(conn: aiosqlite.Connection, s: dict) -> None:
                    :level_max_cm, :volume_max_l, :rssi)
            ON CONFLICT(alias) DO UPDATE SET
                node_id=excluded.node_id, sensor_id=excluded.sensor_id,
+               name=excluded.name,
                ts=excluded.ts, level_cm=excluded.level_cm, volume_l=excluded.volume_l,
-               pct=excluded.pct, rssi=excluded.rssi""",
+               pct=excluded.pct, rssi=excluded.rssi,
+               level_max_cm=excluded.level_max_cm, volume_max_l=excluded.volume_max_l""",
         s,
     )
     await conn.commit()
@@ -71,7 +74,6 @@ async def upsert_state(conn: aiosqlite.Connection, s: dict) -> None:
 
 async def get_all_states(conn: aiosqlite.Connection) -> list[dict]:
     now = int(time.time())
-    conn.row_factory = aiosqlite.Row
     async with conn.execute("SELECT * FROM reservoir_state") as cur:
         rows = await cur.fetchall()
     result = []
@@ -85,7 +87,6 @@ async def get_all_states(conn: aiosqlite.Connection) -> list[dict]:
 async def get_history(
     conn: aiosqlite.Connection, alias: str, since_ts: int
 ) -> list[dict]:
-    conn.row_factory = aiosqlite.Row
     async with conn.execute(
         "SELECT ts, level_cm, volume_l, pct FROM readings WHERE alias=? AND ts>=? ORDER BY ts ASC",
         (alias, since_ts),
@@ -102,7 +103,6 @@ async def get_readings_for_date(
     day = datetime.date.fromisoformat(date_str)
     ts_start = int(datetime.datetime(day.year, day.month, day.day, 0, 0, 0).timestamp())
     ts_end = ts_start + 86400
-    conn.row_factory = aiosqlite.Row
     async with conn.execute(
         "SELECT ts, volume_l, level_cm, pct FROM readings WHERE alias=? AND ts>=? AND ts<? ORDER BY ts ASC",
         (alias, ts_start, ts_end),
