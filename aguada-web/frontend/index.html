@@ -8,7 +8,7 @@
     tailwind.config = { darkMode: 'class' }
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
   <style>
     [x-cloak] { display: none; }
     .card-hover {
@@ -184,8 +184,6 @@
 
         init() {
           this.connectWS();
-          // Update time-ago display every 30s
-          setInterval(() => { this.$nextTick(() => {}); }, 30000);
         },
 
         toggleDark() {
@@ -210,11 +208,7 @@
 
         connectWS() {
           const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const host = location.hostname || 'localhost';
-          const port = location.port || '8000';
-          const url = `${protocol}//${host}:${port}/ws`;
-
-          this.ws = new WebSocket(url);
+          this.ws = new WebSocket(`${protocol}//${location.host}/ws`);
 
           this.ws.onopen = () => {
             this.wsConnected = true;
