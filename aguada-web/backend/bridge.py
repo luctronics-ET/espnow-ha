@@ -82,6 +82,46 @@ class Bridge:
         self.notify_cb = notify_cb
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
+        self._mqtt_client = None
+        self._init_mqtt()
+
+    def _init_mqtt(self) -> None:
+        host = os.getenv("MQTT_HOST", "")
+        if not host:
+            return
+        import paho.mqtt.client as mqtt
+        self._mqtt_client = mqtt.Client()
+        user = os.getenv("MQTT_USER", "")
+        pwd = os.getenv("MQTT_PASS", "")
+        if user:
+            self._mqtt_client.username_pw_set(user, pwd)
+        port = int(os.getenv("MQTT_PORT", "1883"))
+        self._mqtt_client.connect_async(host, port)
+        self._mqtt_client.loop_start()
+        logger.info("MQTT configurado: %s:%d", host, port)
+
+    def _publish_mqtt(self, record: dict) -> None:
+        if not self._mqtt_client:
+            return
+        alias = record["alias"]
+        node_id = record["node_id"]
+        sensor_id = record["sensor_id"]
+        payload = json.dumps({
+            "alias": alias,
+            "distance_cm": record.get("distance_cm"),
+            "level_cm": record.get("level_cm"),
+            "pct": record.get("pct"),
+            "volume_l": record.get("volume_l"),
+            "rssi": record.get("rssi"),
+            "vbat": record.get("vbat"),
+            "seq": record.get("seq"),
+            "ts": record.get("ts"),
+        })
+        topic = f"aguada/{node_id}/{sensor_id}/state"
+        try:
+            self._mqtt_client.publish(topic, payload, retain=True)
+        except Exception as e:
+            logger.warning("MQTT publish error: %s", e)
 
     def start(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
@@ -160,3 +200,4 @@ class Bridge:
             await insert_reading(conn, record)
             await upsert_state(conn, record)
         self.notify_cb(record)
+        self._publish_mqtt(record)
