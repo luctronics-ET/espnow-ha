@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="pt-BR" x-data="reportApp()" x-init="init()" :class="{ 'dark': darkMode }">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aguada — Relatório</title>
+  <script>
+    tailwind.config = { darkMode: 'class' }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none; }
+    .card-hover {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+  </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen" x-cloak>
+
+  <!-- Header -->
+  <header class="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">A</div>
+          <span class="font-semibold text-lg text-gray-800 dark:text-gray-100">Aguada CMASM</span>
+        </div>
+        <nav class="hidden md:flex items-center gap-1">
+          <a href="index.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Dashboard</a>
+          <a href="scada.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">SCADA</a>
+          <a href="history.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Histórico</a>
+          <a href="consumption.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Consumo</a>
+          <a href="report.html" class="px-4 py-2 rounded-md text-sm font-medium bg-blue-600 text-white">Relatório</a>
+        </nav>
+        <div class="flex items-center gap-3">
+          <button @click="toggleDark()" class="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Alternar tema">
+            <svg x-show="!darkMode" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+            <svg x-show="darkMode" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m8.66-9h-1M4.34 12h-1m15.07-6.07l-.71.71M6.34 17.66l-.71.71M17.66 17.66l-.71-.71M6.34 6.34l-.71-.71M12 7a5 5 0 100 10A5 5 0 0012 7z" /></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <h1 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">Relatório Diário</h1>
+
+    <!-- Filter Bar -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-6 flex flex-wrap items-center gap-4">
+      <!-- Date Selector -->
+      <div class="flex items-center gap-2">
+        <label class="text-sm font-medium text-gray-600 dark:text-gray-300">Data</label>
+        <input type="date" x-model="date" class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+
+      <!-- Ver Relatório Button -->
+      <button @click="load()" :disabled="loading"
+        class="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2">
+        <svg x-show="loading" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        Ver Relatório
+      </button>
+
+      <!-- PDF Download -->
+      <a :href="'/api/report/daily.pdf?date=' + date"
+        class="px-4 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"
+        download>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+        </svg>
+        Baixar PDF
+      </a>
+
+      <!-- Date display -->
+      <span x-show="reportDate" class="text-sm text-gray-500 dark:text-gray-400 ml-auto">
+        Relatório de <strong x-text="reportDate"></strong>
+      </span>
+    </div>
+
+    <!-- Alerts Section -->
+    <div x-show="alerts.length > 0" class="mb-6">
+      <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
+        <div class="flex items-start gap-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div>
+            <h3 class="text-sm font-semibold text-red-700 dark:text-red-400 mb-1">Alertas — Nível Crítico (&lt;20%)</h3>
+            <ul class="space-y-0.5">
+              <template x-for="(alert, i) in alerts" :key="i">
+                <li class="text-sm text-red-600 dark:text-red-300">
+                  <span class="font-medium" x-text="alert.alias"></span>:
+                  <span x-text="alert.name"></span> —
+                  <span class="font-bold" x-text="alert.pct + '%'"></span>
+                  <span x-show="alert.volume_l !== null && alert.volume_l !== undefined" x-text="' (' + Math.round(alert.volume_l) + ' L)'"></span>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Report Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Resumo dos Reservatórios</h2>
+        <span class="text-xs text-gray-400 dark:text-gray-500" x-text="rows.length + ' reservatórios'"></span>
+      </div>
+
+      <div x-show="rows.length === 0 && !loading" class="p-8 text-center text-gray-400 dark:text-gray-600">
+        <p>Selecione uma data e clique em "Ver Relatório" para visualizar.</p>
+      </div>
+
+      <div x-show="rows.length > 0" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 dark:bg-gray-700/50 text-xs uppercase text-gray-500 dark:text-gray-400 tracking-wide">
+              <th class="px-4 py-3 text-left">Alias</th>
+              <th class="px-4 py-3 text-left">Nome</th>
+              <th class="px-4 py-3 text-right">Nível %</th>
+              <th class="px-4 py-3 text-right">Volume (L)</th>
+              <th class="px-4 py-3 text-right">Leituras</th>
+              <th class="px-4 py-3 text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="(row, i) in rows" :key="i">
+              <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                <td class="px-4 py-2.5 font-bold text-gray-800 dark:text-gray-100" x-text="row.alias"></td>
+                <td class="px-4 py-2.5 text-gray-600 dark:text-gray-300" x-text="row.name || '—'"></td>
+                <td class="px-4 py-2.5 text-right">
+                  <span class="font-semibold"
+                    :class="{
+                      'text-green-600': row.pct >= 80,
+                      'text-blue-500': row.pct >= 50 && row.pct < 80,
+                      'text-yellow-500': row.pct >= 20 && row.pct < 50,
+                      'text-red-500': row.pct < 20
+                    }"
+                    x-text="row.pct !== null && row.pct !== undefined ? row.pct + '%' : '—'">
+                  </span>
+                </td>
+                <td class="px-4 py-2.5 text-right font-mono" x-text="row.volume_l !== null && row.volume_l !== undefined ? Math.round(row.volume_l).toLocaleString('pt-BR') : '—'"></td>
+                <td class="px-4 py-2.5 text-right text-gray-500 dark:text-gray-400" x-text="row.readings_count !== null && row.readings_count !== undefined ? row.readings_count : '—'"></td>
+                <td class="px-4 py-2.5 text-center">
+                  <span class="px-2 py-0.5 rounded-full text-xs font-medium"
+                    :class="{
+                      'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400': row.pct !== null && row.pct >= 20,
+                      'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400': row.pct !== null && row.pct < 20,
+                      'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400': row.pct === null || row.pct === undefined
+                    }"
+                    x-text="row.pct === null || row.pct === undefined ? 'Sem dados' : row.pct < 20 ? 'Crítico' : row.pct < 50 ? 'Baixo' : row.pct < 80 ? 'Normal' : 'Cheio'">
+                  </span>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function reportApp() {
+      const today = new Date().toISOString().slice(0, 10);
+      return {
+        darkMode: localStorage.getItem('darkMode') === 'true',
+        date: today,
+        rows: [],
+        alerts: [],
+        loading: false,
+        reportDate: null,
+
+        init() {
+          this.load();
+        },
+
+        toggleDark() {
+          this.darkMode = !this.darkMode;
+          localStorage.setItem('darkMode', this.darkMode);
+        },
+
+        async load() {
+          this.loading = true;
+          this.rows = [];
+          this.alerts = [];
+          this.reportDate = null;
+          try {
+            const res = await fetch(`/api/report/daily?date=${this.date}`);
+            if (res.ok) {
+              const data = await res.json();
+              // Support both {reservoirs: [...]} and flat array
+              this.rows = data.reservoirs || data || [];
+              this.reportDate = new Date(this.date + 'T12:00:00').toLocaleDateString('pt-BR', {
+                weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+              });
+              // Build alerts for pct < 20%
+              this.alerts = this.rows.filter(r => r.pct !== null && r.pct !== undefined && r.pct < 20);
+            }
+          } catch(e) {
+            console.error('Report load error:', e);
+          } finally {
+            this.loading = false;
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

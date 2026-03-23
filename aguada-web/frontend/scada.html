@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="pt-BR" x-data="scadaApp()" x-init="init()" :class="{ 'dark': darkMode }">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aguada — SCADA</title>
+  <script>
+    tailwind.config = { darkMode: 'class' }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none; }
+    .card-hover {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    @keyframes flow {
+      to { stroke-dashoffset: -20; }
+    }
+    .pipe-active {
+      stroke-dasharray: 10 5;
+      animation: flow 0.8s linear infinite;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen" x-cloak>
+
+  <!-- Header -->
+  <header class="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">A</div>
+          <span class="font-semibold text-lg text-gray-800 dark:text-gray-100">Aguada CMASM</span>
+        </div>
+        <nav class="hidden md:flex items-center gap-1">
+          <a href="index.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Dashboard</a>
+          <a href="scada.html" class="px-4 py-2 rounded-md text-sm font-medium bg-blue-600 text-white">SCADA</a>
+          <a href="history.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Histórico</a>
+          <a href="consumption.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Consumo</a>
+          <a href="report.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Relatório</a>
+        </nav>
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <span :class="loading ? 'bg-yellow-400 animate-pulse' : 'bg-green-500'" class="w-2 h-2 rounded-full inline-block"></span>
+            <span x-text="loading ? 'Atualizando...' : 'Ao vivo'"></span>
+          </div>
+          <button @click="toggleDark()" class="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Alternar tema">
+            <svg x-show="!darkMode" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+            <svg x-show="darkMode" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m8.66-9h-1M4.34 12h-1m15.07-6.07l-.71.71M6.34 17.66l-.71.71M17.66 17.66l-.71-.71M6.34 6.34l-.71-.71M12 7a5 5 0 100 10A5 5 0 0012 7z" /></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <h1 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">Diagrama SCADA — Reservatórios CMASM</h1>
+
+    <!-- SVG Diagram -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-6 overflow-x-auto">
+      <svg viewBox="0 0 1000 650" xmlns="http://www.w3.org/2000/svg" class="w-full" style="min-width:600px; max-height:500px;">
+        <defs>
+          <linearGradient id="waterGradCIE1" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#2563eb" stop-opacity="1"/>
+          </linearGradient>
+          <linearGradient id="waterGradCIE2" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#2563eb" stop-opacity="1"/>
+          </linearGradient>
+          <linearGradient id="waterGradCBIF1" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#2563eb" stop-opacity="1"/>
+          </linearGradient>
+          <linearGradient id="waterGradCBIF2" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#2563eb" stop-opacity="1"/>
+          </linearGradient>
+          <linearGradient id="waterGradCB31" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#2563eb" stop-opacity="1"/>
+          </linearGradient>
+          <linearGradient id="waterGradCB32" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#2563eb" stop-opacity="1"/>
+          </linearGradient>
+          <linearGradient id="waterGradCON" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#2563eb" stop-opacity="1"/>
+          </linearGradient>
+          <linearGradient id="waterGradCAV" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#2563eb" stop-opacity="1"/>
+          </linearGradient>
+
+          <!-- Clip paths for each tank -->
+          <clipPath id="clipCIE1"><rect x="30" y="30" width="110" height="120"/></clipPath>
+          <clipPath id="clipCIE2"><rect x="170" y="30" width="110" height="120"/></clipPath>
+          <clipPath id="clipCBIF1"><rect x="720" y="30" width="110" height="120"/></clipPath>
+          <clipPath id="clipCBIF2"><rect x="860" y="30" width="110" height="120"/></clipPath>
+          <clipPath id="clipCB31"><rect x="100" y="290" width="110" height="100"/></clipPath>
+          <clipPath id="clipCB32"><rect x="230" y="290" width="110" height="100"/></clipPath>
+          <clipPath id="clipCON"><rect x="380" y="430" width="110" height="140"/></clipPath>
+          <clipPath id="clipCAV"><rect x="680" y="430" width="110" height="140"/></clipPath>
+        </defs>
+
+        <!-- Pipeline lines -->
+        <!-- CIE group to CB31/CB32 -->
+        <line x1="85" y1="150" x2="85" y2="290" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
+        <line x1="225" y1="150" x2="285" y2="290" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
+        <!-- CB31/CB32 to CON -->
+        <line x1="155" y1="390" x2="435" y2="430" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
+        <line x1="285" y1="390" x2="435" y2="430" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
+        <!-- CBIF group to CAV -->
+        <line x1="775" y1="150" x2="735" y2="430" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
+        <line x1="915" y1="150" x2="735" y2="430" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
+        <!-- CON to CAV -->
+        <line x1="490" y1="500" x2="680" y2="500" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
+
+        <!-- Group label areas -->
+        <text x="85" y="20" text-anchor="middle" font-size="11" fill="#6b7280">Cisterna IE</text>
+        <text x="775" y="20" text-anchor="middle" font-size="11" fill="#6b7280">Casa Bombas IF</text>
+        <text x="165" y="280" text-anchor="middle" font-size="11" fill="#6b7280">Casa Bombas Nº3</text>
+        <text x="435" y="420" text-anchor="middle" font-size="11" fill="#6b7280">Castelo Consumo</text>
+        <text x="735" y="420" text-anchor="middle" font-size="11" fill="#6b7280">Castelo Incêndio</text>
+
+        <!-- Tank: CIE1 -->
+        <g>
+          <rect x="30" y="30" width="110" height="120" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
+          <rect :y="30 + 120 - (getTankPct('CIE1') / 100 * 120)" x="30" :height="getTankPct('CIE1') / 100 * 120" width="110"
+                fill="url(#waterGradCIE1)" clip-path="url(#clipCIE1)" />
+          <rect x="30" y="30" width="110" height="120" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
+          <text x="85" y="25" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">CIE1</text>
+          <text x="85" y="96" text-anchor="middle" font-size="14" font-weight="bold" fill="white"
+                :fill="getTankPct('CIE1') > 30 ? 'white' : '#374151'"
+                x-text="getTankPct('CIE1') + '%'">—%</text>
+        </g>
+
+        <!-- Tank: CIE2 -->
+        <g>
+          <rect x="170" y="30" width="110" height="120" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
+          <rect :y="30 + 120 - (getTankPct('CIE2') / 100 * 120)" x="170" :height="getTankPct('CIE2') / 100 * 120" width="110"
+                fill="url(#waterGradCIE2)" clip-path="url(#clipCIE2)" />
+          <rect x="170" y="30" width="110" height="120" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
+          <text x="225" y="25" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">CIE2</text>
+          <text x="225" y="96" text-anchor="middle" font-size="14" font-weight="bold"
+                :fill="getTankPct('CIE2') > 30 ? 'white' : '#374151'"
+                x-text="getTankPct('CIE2') + '%'">—%</text>
+        </g>
+
+        <!-- Tank: CBIF1 -->
+        <g>
+          <rect x="720" y="30" width="110" height="120" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
+          <rect :y="30 + 120 - (getTankPct('CBIF1') / 100 * 120)" x="720" :height="getTankPct('CBIF1') / 100 * 120" width="110"
+                fill="url(#waterGradCBIF1)" clip-path="url(#clipCBIF1)" />
+          <rect x="720" y="30" width="110" height="120" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
+          <text x="775" y="25" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">CBIF1</text>
+          <text x="775" y="96" text-anchor="middle" font-size="14" font-weight="bold"
+                :fill="getTankPct('CBIF1') > 30 ? 'white' : '#374151'"
+                x-text="getTankPct('CBIF1') + '%'">—%</text>
+        </g>
+
+        <!-- Tank: CBIF2 -->
+        <g>
+          <rect x="860" y="30" width="110" height="120" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
+          <rect :y="30 + 120 - (getTankPct('CBIF2') / 100 * 120)" x="860" :height="getTankPct('CBIF2') / 100 * 120" width="110"
+                fill="url(#waterGradCBIF2)" clip-path="url(#clipCBIF2)" />
+          <rect x="860" y="30" width="110" height="120" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
+          <text x="915" y="25" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">CBIF2</text>
+          <text x="915" y="96" text-anchor="middle" font-size="14" font-weight="bold"
+                :fill="getTankPct('CBIF2') > 30 ? 'white' : '#374151'"
+                x-text="getTankPct('CBIF2') + '%'">—%</text>
+        </g>
+
+        <!-- Tank: CB31 -->
+        <g>
+          <rect x="100" y="290" width="110" height="100" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
+          <rect :y="290 + 100 - (getTankPct('CB31') / 100 * 100)" x="100" :height="getTankPct('CB31') / 100 * 100" width="110"
+                fill="url(#waterGradCB31)" clip-path="url(#clipCB31)" />
+          <rect x="100" y="290" width="110" height="100" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
+          <text x="155" y="285" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">CB31</text>
+          <text x="155" y="344" text-anchor="middle" font-size="14" font-weight="bold"
+                :fill="getTankPct('CB31') > 30 ? 'white' : '#374151'"
+                x-text="getTankPct('CB31') + '%'">—%</text>
+        </g>
+
+        <!-- Tank: CB32 -->
+        <g>
+          <rect x="230" y="290" width="110" height="100" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
+          <rect :y="290 + 100 - (getTankPct('CB32') / 100 * 100)" x="230" :height="getTankPct('CB32') / 100 * 100" width="110"
+                fill="url(#waterGradCB32)" clip-path="url(#clipCB32)" />
+          <rect x="230" y="290" width="110" height="100" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
+          <text x="285" y="285" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">CB32</text>
+          <text x="285" y="344" text-anchor="middle" font-size="14" font-weight="bold"
+                :fill="getTankPct('CB32') > 30 ? 'white' : '#374151'"
+                x-text="getTankPct('CB32') + '%'">—%</text>
+        </g>
+
+        <!-- Tank: CON -->
+        <g>
+          <rect x="380" y="430" width="110" height="140" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
+          <rect :y="430 + 140 - (getTankPct('CON') / 100 * 140)" x="380" :height="getTankPct('CON') / 100 * 140" width="110"
+                fill="url(#waterGradCON)" clip-path="url(#clipCON)" />
+          <rect x="380" y="430" width="110" height="140" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
+          <text x="435" y="425" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">CON</text>
+          <text x="435" y="504" text-anchor="middle" font-size="14" font-weight="bold"
+                :fill="getTankPct('CON') > 30 ? 'white' : '#374151'"
+                x-text="getTankPct('CON') + '%'">—%</text>
+        </g>
+
+        <!-- Tank: CAV -->
+        <g>
+          <rect x="680" y="430" width="110" height="140" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
+          <rect :y="430 + 140 - (getTankPct('CAV') / 100 * 140)" x="680" :height="getTankPct('CAV') / 100 * 140" width="110"
+                fill="url(#waterGradCAV)" clip-path="url(#clipCAV)" />
+          <rect x="680" y="430" width="110" height="140" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
+          <text x="735" y="425" text-anchor="middle" font-size="12" font-weight="bold" fill="#374151">CAV</text>
+          <text x="735" y="504" text-anchor="middle" font-size="14" font-weight="bold"
+                :fill="getTankPct('CAV') > 30 ? 'white' : '#374151'"
+                x-text="getTankPct('CAV') + '%'">—%</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- Detail Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+      <template x-for="alias in ['CIE1','CIE2','CBIF1','CBIF2','CB31','CB32','CON','CAV']" :key="alias">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 card-hover text-center">
+          <div class="font-bold text-sm mb-1" x-text="alias"></div>
+          <template x-if="getReservoir(alias)">
+            <div>
+              <div class="text-xl font-bold"
+                :class="{
+                  'text-gray-400': !getReservoir(alias)?.online,
+                  'text-green-600': getReservoir(alias)?.online && (getReservoir(alias)?.pct ?? 0) >= 80,
+                  'text-blue-500': getReservoir(alias)?.online && (getReservoir(alias)?.pct ?? 0) >= 50 && (getReservoir(alias)?.pct ?? 0) < 80,
+                  'text-yellow-500': getReservoir(alias)?.online && (getReservoir(alias)?.pct ?? 0) >= 20 && (getReservoir(alias)?.pct ?? 0) < 50,
+                  'text-red-500': getReservoir(alias)?.online && (getReservoir(alias)?.pct ?? 0) < 20
+                }"
+                x-text="getReservoir(alias)?.online ? ((getReservoir(alias)?.pct ?? '—') + '%') : 'Off'">
+              </div>
+              <div class="text-xs text-gray-400 dark:text-gray-500 mt-1" x-text="getReservoir(alias)?.volume_l ? Math.round(getReservoir(alias).volume_l) + 'L' : '—'"></div>
+            </div>
+          </template>
+          <template x-if="!getReservoir(alias)">
+            <div class="text-gray-300 dark:text-gray-600 text-sm">—</div>
+          </template>
+        </div>
+      </template>
+    </div>
+  </main>
+
+  <script>
+    function scadaApp() {
+      return {
+        darkMode: localStorage.getItem('darkMode') === 'true',
+        reservoirs: [],
+        loading: false,
+        pollTimer: null,
+
+        tankPos: {
+          CIE1:  { x: 30,  y: 30,  w: 110, h: 120 },
+          CIE2:  { x: 170, y: 30,  w: 110, h: 120 },
+          CBIF1: { x: 720, y: 30,  w: 110, h: 120 },
+          CBIF2: { x: 860, y: 30,  w: 110, h: 120 },
+          CB31:  { x: 100, y: 290, w: 110, h: 100 },
+          CB32:  { x: 230, y: 290, w: 110, h: 100 },
+          CON:   { x: 380, y: 430, w: 110, h: 140 },
+          CAV:   { x: 680, y: 430, w: 110, h: 140 }
+        },
+
+        init() {
+          this.load();
+          this.pollTimer = setInterval(() => this.load(), 30000);
+        },
+
+        async load() {
+          this.loading = true;
+          try {
+            const res = await fetch('/api/reservoirs');
+            if (res.ok) {
+              this.reservoirs = await res.json();
+            }
+          } catch(e) {
+            console.error('SCADA load error:', e);
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        getReservoir(alias) {
+          return this.reservoirs.find(r => r.alias === alias) || null;
+        },
+
+        getTankPct(alias) {
+          const r = this.getReservoir(alias);
+          if (!r || !r.online || r.pct === null || r.pct === undefined) return 0;
+          return Math.max(0, Math.min(100, r.pct));
+        },
+
+        toggleDark() {
+          this.darkMode = !this.darkMode;
+          localStorage.setItem('darkMode', this.darkMode);
+        }
+      };
+    }
+  </script>
+</body>
+</html>
