@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR" x-data="dashboardApp()" x-init="init()" :class="{ 'dark': darkMode }">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aguada — Dashboard</title>
+  <script>
+    tailwind.config = { darkMode: 'class' }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none; }
+    .card-hover {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+  </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen" x-cloak>
+
+  <!-- Header -->
+  <header class="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <!-- Logo + Title -->
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">A</div>
+          <span class="font-semibold text-lg text-gray-800 dark:text-gray-100">Aguada CMASM</span>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="hidden md:flex items-center gap-1">
+          <a href="index.html" class="px-4 py-2 rounded-md text-sm font-medium bg-blue-600 text-white">Dashboard</a>
+          <a href="scada.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">SCADA</a>
+          <a href="history.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Histórico</a>
+          <a href="consumption.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Consumo</a>
+          <a href="report.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Relatório</a>
+        </nav>
+
+        <!-- Right Controls -->
+        <div class="flex items-center gap-3">
+          <!-- WS Status -->
+          <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <span :class="wsConnected ? 'bg-green-500' : 'bg-red-500'" class="w-2 h-2 rounded-full inline-block"></span>
+            <span x-text="wsConnected ? 'Conectado' : 'Desconectado'"></span>
+            <span x-show="lastUpdate" class="hidden sm:inline" x-text="'· ' + timeAgo(lastUpdate)"></span>
+          </div>
+          <!-- Dark Mode Toggle -->
+          <button @click="toggleDark()" class="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Alternar tema">
+            <svg x-show="!darkMode" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+            <svg x-show="darkMode" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m8.66-9h-1M4.34 12h-1m15.07-6.07l-.71.71M6.34 17.66l-.71.71M17.66 17.66l-.71-.71M6.34 6.34l-.71-.71M12 7a5 5 0 100 10A5 5 0 0012 7z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <!-- Total Reservoirs -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm card-hover">
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Reservatórios</div>
+        <div class="text-3xl font-bold text-gray-800 dark:text-gray-100" x-text="reservoirs.length"></div>
+        <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">monitorados</div>
+      </div>
+      <!-- Online Nodes -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm card-hover">
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Nós Online</div>
+        <div class="text-3xl font-bold" :class="onlineCount === reservoirs.length && reservoirs.length > 0 ? 'text-green-600' : 'text-yellow-500'">
+          <span x-text="onlineCount"></span><span class="text-lg text-gray-400 dark:text-gray-500">/<span x-text="reservoirs.length"></span></span>
+        </div>
+        <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">ativos</div>
+      </div>
+      <!-- Total Volume -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm card-hover">
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Volume Total</div>
+        <div class="text-3xl font-bold text-blue-600 dark:text-blue-400" x-text="(totalVolume / 1000).toFixed(1) + ' m³'"></div>
+        <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">armazenados</div>
+      </div>
+      <!-- Average % -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm card-hover">
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Nível Médio</div>
+        <div class="text-3xl font-bold"
+          :class="{
+            'text-green-600': avgPct >= 80,
+            'text-blue-500': avgPct >= 50 && avgPct < 80,
+            'text-yellow-500': avgPct >= 20 && avgPct < 50,
+            'text-red-500': avgPct < 20 && avgPct >= 0
+          }"
+          x-text="avgPct + '%'">
+        </div>
+        <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">nível médio</div>
+      </div>
+    </div>
+
+    <!-- Reservoir Cards Grid -->
+    <template x-if="reservoirs.length === 0">
+      <div class="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-600">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+        </svg>
+        <p class="text-lg font-medium">Nenhum reservatório</p>
+        <p class="text-sm mt-1">Aguardando dados via WebSocket...</p>
+      </div>
+    </template>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <template x-for="r in reservoirs" :key="r.alias">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden card-hover">
+          <!-- Colored Header -->
+          <div class="px-4 py-3 flex items-center justify-between"
+            :class="{
+              'bg-gray-400': !r.online || r.pct === null,
+              'bg-green-500': r.online && r.pct !== null && r.pct >= 80,
+              'bg-blue-500': r.online && r.pct !== null && r.pct >= 50 && r.pct < 80,
+              'bg-yellow-400': r.online && r.pct !== null && r.pct >= 20 && r.pct < 50,
+              'bg-red-500': r.online && r.pct !== null && r.pct < 20
+            }">
+            <span class="font-bold text-white text-lg" x-text="r.alias"></span>
+            <span class="text-white text-sm font-medium" x-text="r.online ? (r.pct !== null ? r.pct + '%' : 'N/A') : 'Offline'"></span>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="h-2 bg-gray-200 dark:bg-gray-700">
+            <div class="h-2 transition-all duration-500"
+              :class="{
+                'bg-gray-400': !r.online || r.pct === null,
+                'bg-green-500': r.online && r.pct !== null && r.pct >= 80,
+                'bg-blue-500': r.online && r.pct !== null && r.pct >= 50 && r.pct < 80,
+                'bg-yellow-400': r.online && r.pct !== null && r.pct >= 20 && r.pct < 50,
+                'bg-red-500': r.online && r.pct !== null && r.pct < 20
+              }"
+              :style="'width: ' + (r.online && r.pct !== null ? r.pct : 0) + '%'">
+            </div>
+          </div>
+
+          <!-- Details -->
+          <div class="px-4 py-3 space-y-1.5 text-sm">
+            <div class="flex justify-between">
+              <span class="text-gray-500 dark:text-gray-400">Nível</span>
+              <span class="font-medium" x-text="r.level_cm !== null && r.level_cm !== undefined ? r.level_cm + ' cm' : '—'"></span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500 dark:text-gray-400">Volume</span>
+              <span class="font-medium" x-text="r.volume_l !== null && r.volume_l !== undefined ? formatVol(r.volume_l) + ' L' : '—'"></span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500 dark:text-gray-400">Capacidade</span>
+              <span class="font-medium" x-text="r.volume_max_l !== null && r.volume_max_l !== undefined ? formatVol(r.volume_max_l) + ' L' : '—'"></span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500 dark:text-gray-400">RSSI</span>
+              <span class="font-medium" :class="rssiColor(r.rssi)" x-text="r.rssi !== null && r.rssi !== undefined ? r.rssi + ' dBm' : '—'"></span>
+            </div>
+            <div class="flex justify-between pt-1 border-t border-gray-100 dark:border-gray-700">
+              <span class="text-gray-400 dark:text-gray-500 text-xs">Última leitura</span>
+              <span class="text-xs text-gray-500 dark:text-gray-400" x-text="r.ts ? timeAgo(r.ts) : '—'"></span>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </main>
+
+  <script>
+    function dashboardApp() {
+      return {
+        darkMode: localStorage.getItem('darkMode') === 'true',
+        reservoirs: [],
+        wsConnected: false,
+        lastUpdate: null,
+        wsRetryDelay: 1000,
+        ws: null,
+
+        init() {
+          this.connectWS();
+          // Update time-ago display every 30s
+          setInterval(() => { this.$nextTick(() => {}); }, 30000);
+        },
+
+        toggleDark() {
+          this.darkMode = !this.darkMode;
+          localStorage.setItem('darkMode', this.darkMode);
+        },
+
+        get onlineCount() {
+          return this.reservoirs.filter(r => r.online).length;
+        },
+
+        get totalVolume() {
+          return this.reservoirs.reduce((sum, r) => sum + (r.volume_l || 0), 0);
+        },
+
+        get avgPct() {
+          const online = this.reservoirs.filter(r => r.online && r.pct !== null && r.pct !== undefined);
+          if (online.length === 0) return 0;
+          const total = online.reduce((s, r) => s + r.pct, 0);
+          return Math.round(total / online.length);
+        },
+
+        connectWS() {
+          const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const host = location.hostname || 'localhost';
+          const port = location.port || '8000';
+          const url = `${protocol}//${host}:${port}/ws`;
+
+          this.ws = new WebSocket(url);
+
+          this.ws.onopen = () => {
+            this.wsConnected = true;
+            this.wsRetryDelay = 1000;
+          };
+
+          this.ws.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data);
+              this.lastUpdate = new Date().toISOString();
+
+              if (msg.type === 'snapshot') {
+                this.reservoirs = msg.data || [];
+              } else if (msg.type === 'reading') {
+                const d = msg.data;
+                const idx = this.reservoirs.findIndex(r => r.alias === d.alias);
+                if (idx >= 0) {
+                  this.reservoirs[idx] = { ...this.reservoirs[idx], ...d };
+                  this.reservoirs = [...this.reservoirs];
+                } else {
+                  this.reservoirs = [...this.reservoirs, d];
+                }
+              }
+            } catch(e) {
+              console.error('WS parse error:', e);
+            }
+          };
+
+          this.ws.onclose = () => {
+            this.wsConnected = false;
+            // Exponential backoff, max 30s
+            setTimeout(() => this.connectWS(), this.wsRetryDelay);
+            this.wsRetryDelay = Math.min(this.wsRetryDelay * 2, 30000);
+          };
+
+          this.ws.onerror = () => {
+            this.ws.close();
+          };
+        },
+
+        statusColor(pct, online) {
+          if (!online || pct === null || pct === undefined) return 'bg-gray-400';
+          if (pct >= 80) return 'bg-green-500';
+          if (pct >= 50) return 'bg-blue-500';
+          if (pct >= 20) return 'bg-yellow-400';
+          return 'bg-red-500';
+        },
+
+        formatVol(v) {
+          if (v >= 1000) return (v / 1000).toFixed(1) + 'k';
+          return Math.round(v).toString();
+        },
+
+        timeAgo(ts) {
+          if (!ts) return '—';
+          const now = new Date();
+          const then = new Date(ts);
+          const diffSec = Math.floor((now - then) / 1000);
+          if (diffSec < 60) return `${diffSec}s atrás`;
+          const diffMin = Math.floor(diffSec / 60);
+          if (diffMin < 60) return `${diffMin}min atrás`;
+          const diffH = Math.floor(diffMin / 60);
+          return `${diffH}h atrás`;
+        },
+
+        rssiColor(rssi) {
+          if (rssi === null || rssi === undefined) return 'text-gray-400';
+          if (rssi >= -60) return 'text-green-600';
+          if (rssi >= -75) return 'text-yellow-600';
+          return 'text-red-500';
+        }
+      };
+    }
+  </script>
+</body>
+</html>
