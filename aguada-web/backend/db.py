@@ -88,7 +88,10 @@ async def get_history(
     conn: aiosqlite.Connection, alias: str, since_ts: int
 ) -> list[dict]:
     async with conn.execute(
-        "SELECT ts, level_cm, volume_l, pct FROM readings WHERE alias=? AND ts>=? ORDER BY ts ASC",
+        """SELECT ts, distance_cm, level_cm, volume_l, pct, rssi, vbat, seq
+           FROM readings
+           WHERE alias=? AND ts>=?
+           ORDER BY ts ASC""",
         (alias, since_ts),
     ) as cur:
         rows = await cur.fetchall()
@@ -104,7 +107,10 @@ async def get_readings_for_date(
     ts_start = int(datetime.datetime(day.year, day.month, day.day, 0, 0, 0).timestamp())
     ts_end = ts_start + 86400
     async with conn.execute(
-        "SELECT ts, volume_l, level_cm, pct FROM readings WHERE alias=? AND ts>=? AND ts<? ORDER BY ts ASC",
+        """SELECT ts, distance_cm, volume_l, level_cm, pct, rssi, vbat, seq
+           FROM readings
+           WHERE alias=? AND ts>=? AND ts<?
+           ORDER BY ts ASC""",
         (alias, ts_start, ts_end),
     ) as cur:
         rows = await cur.fetchall()

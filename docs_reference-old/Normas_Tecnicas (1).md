@@ -1,4 +1,4 @@
-# Normas Técnicas – Sistema Supervisório de Abastecimento de Água
+claude# Normas Técnicas – Sistema Supervisório de Abastecimento de Água
 
 **Data:** Fevereiro 2026  
 **Escopo:** Sistema web supervisório para monitoramento e gerenciamento de sistema hidráulico com sensores ultrassom em reservatórios, entradas manuais de hidrômetros/bombas/válvulas e laudos de qualidade da água.

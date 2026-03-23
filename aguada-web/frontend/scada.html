@@ -11,20 +11,15 @@
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
   <style>
     [x-cloak] { display: none; }
-    .card-hover {
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .card-hover:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-    }
     @keyframes flow {
       to { stroke-dashoffset: -20; }
     }
-    .pipe-active {
+    .pipe-flow {
       stroke-dasharray: 10 5;
-      animation: flow 0.8s linear infinite;
+      animation: flow 1.2s linear infinite;
     }
+    .tank-btn { cursor: pointer; transition: opacity 0.15s, box-shadow 0.15s; }
+    .tank-btn:hover { opacity: 0.9; box-shadow: 0 0 0 2px #6b7280; border-radius: 6px; }
   </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen" x-cloak>
@@ -42,12 +37,14 @@
           <a href="scada.html" class="px-4 py-2 rounded-md text-sm font-medium bg-blue-600 text-white">SCADA</a>
           <a href="history.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Histórico</a>
           <a href="consumption.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Consumo</a>
+          <a href="abastecimento.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Abastecimento</a>
+          <a href="dados.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Dados</a>
           <a href="report.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Relatório</a>
         </nav>
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-            <span :class="loading ? 'bg-yellow-400 animate-pulse' : 'bg-green-500'" class="w-2 h-2 rounded-full inline-block"></span>
-            <span x-text="loading ? 'Atualizando...' : 'Ao vivo'"></span>
+            <span :class="wsConnected ? 'bg-green-500' : 'bg-red-400 animate-pulse'" class="w-2 h-2 rounded-full inline-block"></span>
+            <span x-text="wsConnected ? 'Ao vivo' : 'Desconectado'"></span>
           </div>
           <button @click="toggleDark()" class="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Alternar tema">
             <svg x-show="!darkMode" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
@@ -59,210 +56,509 @@
   </header>
 
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <h1 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">Diagrama SCADA — Reservatórios CMASM</h1>
+    <h1 class="text-xl font-semibold mb-1 text-gray-700 dark:text-gray-200">Diagrama SCADA — Reservatórios CMASM</h1>
+    <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">Sistema de abastecimento · Ilha do Engenho · Clique em qualquer reservatório para detalhes</p>
 
-    <!-- SVG Diagram -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-6 overflow-x-auto">
-      <svg viewBox="0 0 1000 650" xmlns="http://www.w3.org/2000/svg" class="w-full" style="min-width:600px; max-height:500px;">
-        <defs>
-          <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.9"/>
-            <stop offset="100%" stop-color="#2563eb" stop-opacity="1"/>
-          </linearGradient>
+    <!-- SCADA Layout -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 overflow-x-auto">
+      <div class="flex items-stretch gap-0" style="min-width:700px;">
 
-          <!-- Clip paths for each tank -->
-          <clipPath id="clipCIE1"><rect x="30" y="30" width="110" height="120"/></clipPath>
-          <clipPath id="clipCIE2"><rect x="170" y="30" width="110" height="120"/></clipPath>
-          <clipPath id="clipCBIF1"><rect x="720" y="30" width="110" height="120"/></clipPath>
-          <clipPath id="clipCBIF2"><rect x="860" y="30" width="110" height="120"/></clipPath>
-          <clipPath id="clipCB31"><rect x="100" y="290" width="110" height="100"/></clipPath>
-          <clipPath id="clipCB32"><rect x="230" y="290" width="110" height="100"/></clipPath>
-          <clipPath id="clipCON"><rect x="380" y="430" width="110" height="140"/></clipPath>
-          <clipPath id="clipCAV"><rect x="680" y="430" width="110" height="140"/></clipPath>
-        </defs>
+        <!-- ── CONTINENTE ────────────────────────────────── -->
+        <div class="flex flex-col items-center">
+          <div class="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 px-3 py-1 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+            Continente
+          </div>
 
-        <!-- Pipeline lines -->
-        <!-- CIE group to CB31/CB32 -->
-        <line x1="85" y1="150" x2="85" y2="290" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
-        <line x1="225" y1="150" x2="285" y2="290" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
-        <!-- CB31/CB32 to CON -->
-        <line x1="155" y1="390" x2="435" y2="430" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
-        <line x1="285" y1="390" x2="435" y2="430" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
-        <!-- CBIF group to CAV -->
-        <line x1="775" y1="150" x2="735" y2="430" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
-        <line x1="915" y1="150" x2="735" y2="430" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
-        <!-- CON to CAV -->
-        <line x1="490" y1="500" x2="680" y2="500" class="pipe-active" stroke="#93c5fd" stroke-width="4" fill="none"/>
-
-        <!-- Group label areas -->
-        <text x="85" y="20" text-anchor="middle" font-size="11" :fill="darkMode ? '#9ca3af' : '#6b7280'">Cisterna IE</text>
-        <text x="775" y="20" text-anchor="middle" font-size="11" :fill="darkMode ? '#9ca3af' : '#6b7280'">Casa Bombas IF</text>
-        <text x="165" y="280" text-anchor="middle" font-size="11" :fill="darkMode ? '#9ca3af' : '#6b7280'">Casa Bombas Nº3</text>
-        <text x="435" y="420" text-anchor="middle" font-size="11" :fill="darkMode ? '#9ca3af' : '#6b7280'">Castelo Consumo</text>
-        <text x="735" y="420" text-anchor="middle" font-size="11" :fill="darkMode ? '#9ca3af' : '#6b7280'">Castelo Incêndio</text>
-
-        <!-- Tank: CIE1 -->
-        <g>
-          <rect x="30" y="30" width="110" height="120" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
-          <rect :y="30 + 120 - (getTankPct('CIE1') / 100 * 120)" x="30" :height="getTankPct('CIE1') / 100 * 120" width="110"
-                fill="url(#waterGrad)" clip-path="url(#clipCIE1)" />
-          <rect x="30" y="30" width="110" height="120" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
-          <text x="85" y="25" text-anchor="middle" font-size="12" font-weight="bold" :fill="darkMode ? '#e5e7eb' : '#374151'">CIE1</text>
-          <text x="85" y="96" text-anchor="middle" font-size="14" font-weight="bold" fill="white"
-                :fill="getTankPct('CIE1') > 30 ? 'white' : '#374151'"
-                x-text="getTankPct('CIE1') + '%'">—%</text>
-        </g>
-
-        <!-- Tank: CIE2 -->
-        <g>
-          <rect x="170" y="30" width="110" height="120" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
-          <rect :y="30 + 120 - (getTankPct('CIE2') / 100 * 120)" x="170" :height="getTankPct('CIE2') / 100 * 120" width="110"
-                fill="url(#waterGrad)" clip-path="url(#clipCIE2)" />
-          <rect x="170" y="30" width="110" height="120" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
-          <text x="225" y="25" text-anchor="middle" font-size="12" font-weight="bold" :fill="darkMode ? '#e5e7eb' : '#374151'">CIE2</text>
-          <text x="225" y="96" text-anchor="middle" font-size="14" font-weight="bold"
-                :fill="getTankPct('CIE2') > 30 ? 'white' : '#374151'"
-                x-text="getTankPct('CIE2') + '%'">—%</text>
-        </g>
-
-        <!-- Tank: CBIF1 -->
-        <g>
-          <rect x="720" y="30" width="110" height="120" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
-          <rect :y="30 + 120 - (getTankPct('CBIF1') / 100 * 120)" x="720" :height="getTankPct('CBIF1') / 100 * 120" width="110"
-                fill="url(#waterGrad)" clip-path="url(#clipCBIF1)" />
-          <rect x="720" y="30" width="110" height="120" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
-          <text x="775" y="25" text-anchor="middle" font-size="12" font-weight="bold" :fill="darkMode ? '#e5e7eb' : '#374151'">CBIF1</text>
-          <text x="775" y="96" text-anchor="middle" font-size="14" font-weight="bold"
-                :fill="getTankPct('CBIF1') > 30 ? 'white' : '#374151'"
-                x-text="getTankPct('CBIF1') + '%'">—%</text>
-        </g>
-
-        <!-- Tank: CBIF2 -->
-        <g>
-          <rect x="860" y="30" width="110" height="120" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
-          <rect :y="30 + 120 - (getTankPct('CBIF2') / 100 * 120)" x="860" :height="getTankPct('CBIF2') / 100 * 120" width="110"
-                fill="url(#waterGrad)" clip-path="url(#clipCBIF2)" />
-          <rect x="860" y="30" width="110" height="120" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
-          <text x="915" y="25" text-anchor="middle" font-size="12" font-weight="bold" :fill="darkMode ? '#e5e7eb' : '#374151'">CBIF2</text>
-          <text x="915" y="96" text-anchor="middle" font-size="14" font-weight="bold"
-                :fill="getTankPct('CBIF2') > 30 ? 'white' : '#374151'"
-                x-text="getTankPct('CBIF2') + '%'">—%</text>
-        </g>
-
-        <!-- Tank: CB31 -->
-        <g>
-          <rect x="100" y="290" width="110" height="100" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
-          <rect :y="290 + 100 - (getTankPct('CB31') / 100 * 100)" x="100" :height="getTankPct('CB31') / 100 * 100" width="110"
-                fill="url(#waterGrad)" clip-path="url(#clipCB31)" />
-          <rect x="100" y="290" width="110" height="100" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
-          <text x="155" y="285" text-anchor="middle" font-size="12" font-weight="bold" :fill="darkMode ? '#e5e7eb' : '#374151'">CB31</text>
-          <text x="155" y="344" text-anchor="middle" font-size="14" font-weight="bold"
-                :fill="getTankPct('CB31') > 30 ? 'white' : '#374151'"
-                x-text="getTankPct('CB31') + '%'">—%</text>
-        </g>
-
-        <!-- Tank: CB32 -->
-        <g>
-          <rect x="230" y="290" width="110" height="100" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
-          <rect :y="290 + 100 - (getTankPct('CB32') / 100 * 100)" x="230" :height="getTankPct('CB32') / 100 * 100" width="110"
-                fill="url(#waterGrad)" clip-path="url(#clipCB32)" />
-          <rect x="230" y="290" width="110" height="100" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
-          <text x="285" y="285" text-anchor="middle" font-size="12" font-weight="bold" :fill="darkMode ? '#e5e7eb' : '#374151'">CB32</text>
-          <text x="285" y="344" text-anchor="middle" font-size="14" font-weight="bold"
-                :fill="getTankPct('CB32') > 30 ? 'white' : '#374151'"
-                x-text="getTankPct('CB32') + '%'">—%</text>
-        </g>
-
-        <!-- Tank: CON -->
-        <g>
-          <rect x="380" y="430" width="110" height="140" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
-          <rect :y="430 + 140 - (getTankPct('CON') / 100 * 140)" x="380" :height="getTankPct('CON') / 100 * 140" width="110"
-                fill="url(#waterGrad)" clip-path="url(#clipCON)" />
-          <rect x="380" y="430" width="110" height="140" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
-          <text x="435" y="425" text-anchor="middle" font-size="12" font-weight="bold" :fill="darkMode ? '#e5e7eb' : '#374151'">CON</text>
-          <text x="435" y="504" text-anchor="middle" font-size="14" font-weight="bold"
-                :fill="getTankPct('CON') > 30 ? 'white' : '#374151'"
-                x-text="getTankPct('CON') + '%'">—%</text>
-        </g>
-
-        <!-- Tank: CAV -->
-        <g>
-          <rect x="680" y="430" width="110" height="140" rx="3" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
-          <rect :y="430 + 140 - (getTankPct('CAV') / 100 * 140)" x="680" :height="getTankPct('CAV') / 100 * 140" width="110"
-                fill="url(#waterGrad)" clip-path="url(#clipCAV)" />
-          <rect x="680" y="430" width="110" height="140" rx="3" fill="none" stroke="#6b7280" stroke-width="2"/>
-          <text x="735" y="425" text-anchor="middle" font-size="12" font-weight="bold" :fill="darkMode ? '#e5e7eb' : '#374151'">CAV</text>
-          <text x="735" y="504" text-anchor="middle" font-size="14" font-weight="bold"
-                :fill="getTankPct('CAV') > 30 ? 'white' : '#374151'"
-                x-text="getTankPct('CAV') + '%'">—%</text>
-        </g>
-      </svg>
-    </div>
-
-    <!-- Detail Cards -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-      <template x-for="alias in ['CIE1','CIE2','CBIF1','CBIF2','CB31','CB32','CON','CAV']" :key="alias">
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 card-hover text-center">
-          <div class="font-bold text-sm mb-1" x-text="alias"></div>
-          <template x-if="getReservoir(alias)">
-            <div>
-              <div class="text-xl font-bold"
-                :class="{
-                  'text-gray-400': !getReservoir(alias)?.online,
-                  'text-green-600': getReservoir(alias)?.online && (getReservoir(alias)?.pct ?? 0) >= 80,
-                  'text-blue-500': getReservoir(alias)?.online && (getReservoir(alias)?.pct ?? 0) >= 50 && (getReservoir(alias)?.pct ?? 0) < 80,
-                  'text-yellow-500': getReservoir(alias)?.online && (getReservoir(alias)?.pct ?? 0) >= 20 && (getReservoir(alias)?.pct ?? 0) < 50,
-                  'text-red-500': getReservoir(alias)?.online && (getReservoir(alias)?.pct ?? 0) < 20
-                }"
-                x-text="getReservoir(alias)?.online ? ((getReservoir(alias)?.pct ?? '—') + '%') : 'Off'">
-              </div>
-              <div class="text-xs text-gray-400 dark:text-gray-500 mt-1" x-text="getReservoir(alias)?.volume_l ? Math.round(getReservoir(alias).volume_l) + 'L' : '—'"></div>
+          <!-- Container CBIF -->
+          <div class="border-2 border-blue-200 dark:border-blue-900 rounded-xl bg-blue-50 dark:bg-blue-950/30 p-4 w-48">
+            <div class="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-3 text-center">
+              Casa Bombas IF
             </div>
-          </template>
-          <template x-if="!getReservoir(alias)">
-            <div class="text-gray-300 dark:text-gray-600 text-sm">—</div>
-          </template>
+            <div class="flex gap-2 justify-center">
+              <template x-for="alias in ['CBIF1','CBIF2']" :key="alias">
+                <div class="flex flex-col items-center">
+                  <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1" x-text="alias"></div>
+                  <div class="relative w-14 rounded-md overflow-hidden border tank-btn"
+                       :class="getOnline(alias) ? 'border-gray-300 dark:border-gray-600' : 'border-gray-300 dark:border-gray-600 opacity-70'"
+                       style="height:64px;"
+                       :style="getOnline(alias) ? 'background:#e5e7eb' : 'background:#d1d5db'"
+                       @click="openModal(alias)">
+                    <!-- Preenchimento (cor se online, cinza se offline) -->
+                    <div class="absolute bottom-0 left-0 right-0 transition-all duration-700 rounded-b-sm"
+                         :style="getOnline(alias)
+                           ? `height:${getTankPct(alias)}%; background: linear-gradient(to top, #2563eb, #60a5fa);`
+                           : `height:${getTankPct(alias)}%; background: linear-gradient(to top, #6b7280, #9ca3af);`">
+                    </div>
+                    <!-- Overlay Offline -->
+                    <div x-show="!getOnline(alias)" class="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+                      <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728M5.636 5.636a9 9 0 000 12.728M9 10a3 3 0 116 0"/></svg>
+                      <span class="text-xs font-bold text-gray-400">Off</span>
+                    </div>
+                    <!-- Porcentagem se online -->
+                    <div x-show="getOnline(alias)" class="absolute inset-0 flex items-center justify-center">
+                      <span class="text-xs font-bold drop-shadow"
+                            :class="getTankPct(alias) > 30 ? 'text-white' : 'text-gray-700'"
+                            x-text="getTankPct(alias) + '%'"></span>
+                    </div>
+                    <!-- Ícone de inserção manual (offline) -->
+                    <div x-show="!getOnline(alias)" class="absolute top-0.5 right-0.5">
+                      <svg class="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
+                    </div>
+                  </div>
+                  <div class="text-xs text-gray-400 mt-1" x-text="getOnline(alias) ? getVolume(alias) : 'offline'"></div>
+                </div>
+              </template>
+            </div>
+          </div>
         </div>
-      </template>
+
+        <!-- ── TUBO SUBMARINO ─────────────────────────────── -->
+        <div class="flex flex-col items-center justify-center flex-shrink-0 px-2" style="min-width:100px;">
+          <div class="text-xs text-blue-400 dark:text-blue-500 font-medium mb-2 text-center leading-tight">tubo<br>submarino</div>
+          <div class="relative w-full" style="height:24px;">
+            <svg width="100%" height="24" viewBox="0 0 100 24" preserveAspectRatio="none">
+              <defs>
+                <pattern id="seaPattern" x="0" y="0" width="20" height="24" patternUnits="userSpaceOnUse">
+                  <rect width="20" height="24" fill="#bfdbfe" opacity="0.3"/>
+                  <path d="M0,12 Q5,8 10,12 Q15,16 20,12" stroke="#93c5fd" stroke-width="1" fill="none" opacity="0.5"/>
+                </pattern>
+              </defs>
+              <rect x="0" y="0" width="100" height="24" fill="url(#seaPattern)" rx="2"/>
+              <line x1="0" y1="12" x2="100" y2="12" stroke="#3b82f6" stroke-width="4" stroke-linecap="round"/>
+              <line x1="0" y1="12" x2="100" y2="12" stroke="#93c5fd" stroke-width="2"
+                    stroke-dasharray="8 4" stroke-linecap="round" class="pipe-flow"/>
+            </svg>
+          </div>
+          <div class="text-xs text-blue-300 dark:text-blue-600 mt-1 text-center">~~~~~</div>
+        </div>
+
+        <!-- ── ILHA ──────────────────────────────────────── -->
+        <div class="flex-1 border-2 border-green-200 dark:border-green-900 rounded-xl bg-green-50 dark:bg-green-950/20 p-4 flex flex-col">
+          <div class="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-widest mb-3 text-center">
+            Ilha do Engenho — CMASM
+          </div>
+
+          <!-- Layout horizontal: CIE → seta → CB3 → bifurcação → CON + CAV -->
+          <div class="flex items-center gap-0 flex-1">
+
+            <!-- CIE -->
+            <div class="border-2 border-cyan-200 dark:border-cyan-900 rounded-xl bg-cyan-50 dark:bg-cyan-950/30 p-3 flex-shrink-0">
+              <div class="text-xs font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-wide mb-2 text-center">Cisterna IE</div>
+              <div class="flex gap-2 justify-center">
+                <template x-for="alias in ['CIE1','CIE2']" :key="alias">
+                  <div class="flex flex-col items-center">
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1" x-text="alias"></div>
+                    <div class="relative w-12 rounded-md overflow-hidden border tank-btn"
+                         :class="getOnline(alias) ? 'border-gray-300 dark:border-gray-600' : 'border-gray-300 dark:border-gray-600 opacity-70'"
+                         style="height:60px;"
+                         :style="getOnline(alias) ? 'background:#e5e7eb' : 'background:#d1d5db'"
+                         @click="openModal(alias)">
+                      <div class="absolute bottom-0 left-0 right-0 transition-all duration-700 rounded-b-sm"
+                           :style="getOnline(alias)
+                             ? `height:${getTankPct(alias)}%; background: linear-gradient(to top, #0891b2, #67e8f9);`
+                             : `height:${getTankPct(alias)}%; background: linear-gradient(to top, #6b7280, #9ca3af);`">
+                      </div>
+                      <div x-show="!getOnline(alias)" class="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728M5.636 5.636a9 9 0 000 12.728M9 10a3 3 0 116 0"/></svg>
+                        <span class="text-xs font-bold text-gray-400">Off</span>
+                      </div>
+                      <div x-show="getOnline(alias)" class="absolute inset-0 flex items-center justify-center">
+                        <span class="text-xs font-bold drop-shadow"
+                              :class="getTankPct(alias) > 30 ? 'text-white' : 'text-gray-700'"
+                              x-text="getTankPct(alias) + '%'"></span>
+                      </div>
+                      <div x-show="!getOnline(alias)" class="absolute top-0.5 right-0.5">
+                        <svg class="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
+                      </div>
+                    </div>
+                    <div class="text-xs text-gray-400 mt-1 text-center" x-text="getOnline(alias) ? getVolume(alias) : 'offline'"></div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Seta CIE → CB3 -->
+            <div class="flex items-center flex-shrink-0 px-1">
+              <svg width="32" height="16" viewBox="0 0 32 16">
+                <line x1="0" y1="8" x2="22" y2="8" stroke="#6b7280" stroke-width="2" stroke-dasharray="4 2" class="pipe-flow"/>
+                <path d="M18 3 L30 8 L18 13" fill="#6b7280"/>
+              </svg>
+            </div>
+
+            <!-- CB3 -->
+            <div class="border-2 border-violet-200 dark:border-violet-900 rounded-xl bg-violet-50 dark:bg-violet-950/30 p-3 flex-shrink-0">
+              <div class="text-xs font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wide mb-2 text-center">Casa Bombas Nº3</div>
+              <div class="flex gap-2 justify-center">
+                <template x-for="alias in ['CB31','CB32']" :key="alias">
+                  <div class="flex flex-col items-center">
+                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1" x-text="alias"></div>
+                    <div class="relative w-12 rounded-md overflow-hidden border tank-btn"
+                         :class="getOnline(alias) ? 'border-gray-300 dark:border-gray-600' : 'border-gray-300 dark:border-gray-600 opacity-70'"
+                         style="height:56px;"
+                         :style="getOnline(alias) ? 'background:#e5e7eb' : 'background:#d1d5db'"
+                         @click="openModal(alias)">
+                      <div class="absolute bottom-0 left-0 right-0 transition-all duration-700 rounded-b-sm"
+                           :style="getOnline(alias)
+                             ? `height:${getTankPct(alias)}%; background: linear-gradient(to top, #7c3aed, #c4b5fd);`
+                             : `height:${getTankPct(alias)}%; background: linear-gradient(to top, #6b7280, #9ca3af);`">
+                      </div>
+                      <div x-show="!getOnline(alias)" class="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728M5.636 5.636a9 9 0 000 12.728M9 10a3 3 0 116 0"/></svg>
+                        <span class="text-xs font-bold text-gray-400">Off</span>
+                      </div>
+                      <div x-show="getOnline(alias)" class="absolute inset-0 flex items-center justify-center">
+                        <span class="text-xs font-bold drop-shadow"
+                              :class="getTankPct(alias) > 30 ? 'text-white' : 'text-gray-700'"
+                              x-text="getTankPct(alias) + '%'"></span>
+                      </div>
+                      <div x-show="!getOnline(alias)" class="absolute top-0.5 right-0.5">
+                        <svg class="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
+                      </div>
+                    </div>
+                    <div class="text-xs text-gray-400 mt-1 text-center" x-text="getOnline(alias) ? getVolume(alias) : 'offline'"></div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Bifurcação CB3 → CON (cima) e CAV (baixo) -->
+            <div class="flex items-center flex-shrink-0 px-1">
+              <svg width="48" height="80" viewBox="0 0 48 80">
+                <line x1="0" y1="40" x2="20" y2="40" stroke="#6b7280" stroke-width="2" stroke-dasharray="4 2" class="pipe-flow"/>
+                <line x1="20" y1="40" x2="20" y2="12" stroke="#6b7280" stroke-width="2" stroke-dasharray="4 2" class="pipe-flow"/>
+                <line x1="20" y1="12" x2="38" y2="12" stroke="#6b7280" stroke-width="2" stroke-dasharray="4 2" class="pipe-flow"/>
+                <path d="M33 6 L44 12 L33 18" fill="#059669"/>
+                <line x1="20" y1="40" x2="20" y2="68" stroke="#6b7280" stroke-width="2" stroke-dasharray="4 2" class="pipe-flow"/>
+                <line x1="20" y1="68" x2="38" y2="68" stroke="#6b7280" stroke-width="2" stroke-dasharray="4 2" class="pipe-flow"/>
+                <path d="M33 62 L44 68 L33 74" fill="#dc2626"/>
+                <text x="0" y="10" font-size="7" fill="#059669">consumo</text>
+                <text x="0" y="78" font-size="7" fill="#dc2626">incêndio</text>
+              </svg>
+            </div>
+
+            <!-- CON e CAV empilhados verticalmente -->
+            <div class="flex flex-col gap-2 flex-shrink-0">
+
+              <!-- CON — Castelo Consumo -->
+              <div class="border-2 rounded-xl p-2 flex items-center gap-2 tank-btn"
+                   :class="getOnline('CON') ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30' : 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700/30'"
+                   @click="openModal('CON')">
+                <div>
+                  <div class="text-xs font-bold uppercase tracking-wide leading-tight"
+                       :class="getOnline('CON') ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'">Castelo<br>Consumo</div>
+                  <div class="text-xs flex items-center gap-1 mt-1"
+                       :class="getOnline('CON') ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400'">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm1 11H9v-2h2v2zm0-4H9V7h2v2z"/></svg>
+                    Potável
+                  </div>
+                </div>
+                <div class="flex flex-col items-center">
+                  <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">CON</div>
+                  <div class="relative w-12 rounded-md overflow-hidden border border-gray-300 dark:border-gray-600" style="height:52px;"
+                       :style="getOnline('CON') ? 'background:#e5e7eb' : 'background:#d1d5db'">
+                    <div class="absolute bottom-0 left-0 right-0 transition-all duration-700 rounded-b-sm"
+                         :style="getOnline('CON')
+                           ? `height:${getTankPct('CON')}%; background: linear-gradient(to top, #059669, #6ee7b7);`
+                           : `height:${getTankPct('CON')}%; background: linear-gradient(to top, #6b7280, #9ca3af);`">
+                    </div>
+                    <div x-show="!getOnline('CON')" class="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+                      <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728M5.636 5.636a9 9 0 000 12.728M9 10a3 3 0 116 0"/></svg>
+                      <span class="text-xs font-bold text-gray-400">Off</span>
+                    </div>
+                    <div x-show="getOnline('CON')" class="absolute inset-0 flex items-center justify-center">
+                      <span class="text-xs font-bold drop-shadow"
+                            :class="getTankPct('CON') > 30 ? 'text-white' : 'text-gray-700'"
+                            x-text="getTankPct('CON') + '%'"></span>
+                    </div>
+                    <div x-show="!getOnline('CON')" class="absolute top-0.5 right-0.5">
+                      <svg class="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
+                    </div>
+                  </div>
+                  <div class="text-xs text-gray-400 mt-1" x-text="getOnline('CON') ? getVolume('CON') : 'offline'"></div>
+                </div>
+              </div>
+
+              <!-- CAV — Castelo Incêndio -->
+              <div class="border-2 rounded-xl p-2 flex items-center gap-2 tank-btn"
+                   :class="getOnline('CAV') ? 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30' : 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700/30'"
+                   @click="openModal('CAV')">
+                <div>
+                  <div class="text-xs font-bold uppercase tracking-wide leading-tight"
+                       :class="getOnline('CAV') ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'">Castelo<br>Incêndio</div>
+                  <div class="text-xs flex items-center gap-1 mt-1"
+                       :class="getOnline('CAV') ? 'text-red-500 dark:text-red-400' : 'text-gray-400'">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2c0 0-6 5.686-6 10a6 6 0 0012 0C16 7.686 10 2 10 2z"/></svg>
+                    Incêndio
+                  </div>
+                </div>
+                <div class="flex flex-col items-center">
+                  <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">CAV</div>
+                  <div class="relative w-12 rounded-md overflow-hidden border border-gray-300 dark:border-gray-600" style="height:52px;"
+                       :style="getOnline('CAV') ? 'background:#e5e7eb' : 'background:#d1d5db'">
+                    <div class="absolute bottom-0 left-0 right-0 transition-all duration-700 rounded-b-sm"
+                         :style="getOnline('CAV')
+                           ? `height:${getTankPct('CAV')}%; background: linear-gradient(to top, #dc2626, #fca5a5);`
+                           : `height:${getTankPct('CAV')}%; background: linear-gradient(to top, #6b7280, #9ca3af);`">
+                    </div>
+                    <div x-show="!getOnline('CAV')" class="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+                      <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728M5.636 5.636a9 9 0 000 12.728M9 10a3 3 0 116 0"/></svg>
+                      <span class="text-xs font-bold text-gray-400">Off</span>
+                    </div>
+                    <div x-show="getOnline('CAV')" class="absolute inset-0 flex items-center justify-center">
+                      <span class="text-xs font-bold drop-shadow"
+                            :class="getTankPct('CAV') > 30 ? 'text-white' : 'text-gray-700'"
+                            x-text="getTankPct('CAV') + '%'"></span>
+                    </div>
+                    <div x-show="!getOnline('CAV')" class="absolute top-0.5 right-0.5">
+                      <svg class="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
+                    </div>
+                  </div>
+                  <div class="text-xs text-gray-400 mt-1" x-text="getOnline('CAV') ? getVolume('CAV') : 'offline'"></div>
+                </div>
+              </div>
+
+            </div><!-- fim CON+CAV -->
+
+          </div><!-- fim flex horizontal ilha -->
+        </div><!-- fim ilha -->
+
+      </div><!-- fim flex principal -->
+    </div><!-- fim card -->
+
+    <!-- Legenda / última atualização -->
+    <div class="mt-4 flex flex-wrap gap-4 items-center justify-between text-xs text-gray-400 dark:text-gray-500">
+      <div class="flex flex-wrap gap-4">
+        <span class="flex items-center gap-1"><span class="inline-block w-3 h-1 rounded bg-blue-400"></span> CBIF (continente)</span>
+        <span class="flex items-center gap-1"><span class="inline-block w-3 h-1 rounded bg-cyan-400"></span> CIE (cisterna)</span>
+        <span class="flex items-center gap-1"><span class="inline-block w-3 h-1 rounded bg-violet-400"></span> CB3 (bombas)</span>
+        <span class="flex items-center gap-1"><span class="inline-block w-3 h-1 rounded bg-emerald-400"></span> CON (consumo)</span>
+        <span class="flex items-center gap-1"><span class="inline-block w-3 h-1 rounded bg-red-400"></span> CAV (incêndio)</span>
+        <span class="flex items-center gap-1"><span class="inline-block w-3 h-1 rounded bg-gray-400"></span> Offline</span>
+      </div>
+      <span x-text="lastUpdate ? 'Atualizado: ' + lastUpdate : ''"></span>
     </div>
   </main>
 
+  <!-- ── MODAL DETALHE + INSERÇÃO MANUAL ──────────────────────────────── -->
+  <div x-show="modal.open" x-cloak
+       class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+       @keydown.escape.window="closeModal()">
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="closeModal()"></div>
+
+    <!-- Card -->
+    <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md"
+         @click.stop>
+
+      <!-- Header modal -->
+      <div class="flex items-start justify-between p-5 border-b border-gray-100 dark:border-gray-700">
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 class="text-base font-bold text-gray-800 dark:text-gray-100" x-text="modal.alias"></h2>
+            <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+                  :class="modal.online ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'"
+                  x-text="modal.online ? 'Online' : 'Offline'"></span>
+          </div>
+          <p class="text-xs text-gray-400 mt-0.5" x-text="modal.name"></p>
+        </div>
+        <button @click="closeModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors mt-0.5">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Corpo: tanque + métricas -->
+      <div class="p-5">
+        <div class="flex gap-5 mb-5">
+          <!-- Mini tanque visual -->
+          <div class="flex flex-col items-center flex-shrink-0">
+            <div class="relative w-16 rounded-lg overflow-hidden border-2"
+                 :class="modal.online ? 'border-gray-300 dark:border-gray-500' : 'border-gray-300 dark:border-gray-600'"
+                 style="height:96px;"
+                 :style="modal.online ? 'background:#e5e7eb' : 'background:#d1d5db'">
+              <div class="absolute bottom-0 left-0 right-0 transition-all duration-700"
+                   :style="modal.online
+                     ? `height:${modal.pct}%; background: ${modal.color};`
+                     : `height:${modal.pct}%; background: linear-gradient(to top, #6b7280, #9ca3af);`">
+              </div>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-sm font-bold drop-shadow"
+                      :class="modal.pct > 30 ? 'text-white' : 'text-gray-700'"
+                      x-text="modal.pct + '%'"></span>
+              </div>
+            </div>
+            <div class="text-xs text-gray-400 mt-1 font-mono" x-text="modal.online ? Math.round(modal.volume_l || 0) + ' L' : '—'"></div>
+          </div>
+
+          <!-- Métricas -->
+          <div class="flex-1 grid grid-cols-2 gap-2 text-xs">
+            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+              <div class="text-gray-400 dark:text-gray-500 mb-0.5">Nível</div>
+              <div class="font-semibold text-gray-700 dark:text-gray-200" x-text="modal.level_cm != null ? modal.level_cm + ' cm' : '—'"></div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+              <div class="text-gray-400 dark:text-gray-500 mb-0.5">Volume</div>
+              <div class="font-semibold text-gray-700 dark:text-gray-200" x-text="modal.volume_l != null ? Math.round(modal.volume_l) + ' L' : '—'"></div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+              <div class="text-gray-400 dark:text-gray-500 mb-0.5">RSSI</div>
+              <div class="font-semibold text-gray-700 dark:text-gray-200" x-text="modal.rssi != null ? modal.rssi + ' dBm' : '—'"></div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+              <div class="text-gray-400 dark:text-gray-500 mb-0.5">Última leitura</div>
+              <div class="font-semibold text-gray-700 dark:text-gray-200 leading-tight" x-text="modal.ts ? formatTs(modal.ts) : '—'"></div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+              <div class="text-gray-400 dark:text-gray-500 mb-0.5">Vol. máx</div>
+              <div class="font-semibold text-gray-700 dark:text-gray-200" x-text="modal.volume_max_l != null ? Math.round(modal.volume_max_l) + ' L' : '—'"></div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+              <div class="text-gray-400 dark:text-gray-500 mb-0.5">Nível máx</div>
+              <div class="font-semibold text-gray-700 dark:text-gray-200" x-text="modal.level_max_cm != null ? modal.level_max_cm + ' cm' : '—'"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inserção manual -->
+        <div class="border-t border-gray-100 dark:border-gray-700 pt-4">
+          <div class="flex items-center gap-2 mb-3">
+            <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
+            <span class="text-sm font-semibold text-gray-600 dark:text-gray-300">Inserção manual</span>
+          </div>
+
+          <!-- Modo: por volume ou por % -->
+          <div class="flex gap-2 mb-3">
+            <button @click="modal.manualMode = 'pct'"
+                    :class="modal.manualMode === 'pct' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'"
+                    class="flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors">
+              Por % (nível)
+            </button>
+            <button @click="modal.manualMode = 'volume'"
+                    :class="modal.manualMode === 'volume' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'"
+                    class="flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors">
+              Por volume (L)
+            </button>
+          </div>
+
+          <div class="flex gap-2 items-end">
+            <div class="flex-1">
+              <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1"
+                     x-text="modal.manualMode === 'pct' ? 'Percentual (%)' : 'Volume (litros)'"></label>
+              <input type="number" x-model="modal.manualValue" min="0"
+                     :max="modal.manualMode === 'pct' ? 100 : modal.volume_max_l"
+                     :placeholder="modal.manualMode === 'pct' ? 'ex: 75' : 'ex: 60000'"
+                     class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+            </div>
+            <button @click="submitManual()"
+                    :disabled="modal.saving || !modal.manualValue"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5">
+              <svg x-show="!modal.saving" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <svg x-show="modal.saving" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+              Salvar
+            </button>
+          </div>
+
+          <!-- Feedback de sucesso/erro -->
+          <div x-show="modal.feedback" x-transition
+               class="mt-2 text-xs rounded-lg px-3 py-2 font-medium"
+               :class="modal.feedbackOk ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'"
+               x-text="modal.feedback">
+          </div>
+        </div>
+      </div>
+
+      <!-- Link histórico -->
+      <div class="px-5 pb-4">
+        <a :href="`history.html`" @click="localStorage.setItem('scada_alias', modal.alias)"
+           class="text-xs text-blue-500 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          Ver histórico de <span x-text="modal.alias" class="font-semibold ml-0.5"></span>
+        </a>
+      </div>
+    </div>
+  </div>
+
   <script>
+    // Mapa de cores por alias
+    const ALIAS_COLORS = {
+      'CBIF1': 'linear-gradient(to top, #2563eb, #60a5fa)',
+      'CBIF2': 'linear-gradient(to top, #2563eb, #60a5fa)',
+      'CIE1':  'linear-gradient(to top, #0891b2, #67e8f9)',
+      'CIE2':  'linear-gradient(to top, #0891b2, #67e8f9)',
+      'CB31':  'linear-gradient(to top, #7c3aed, #c4b5fd)',
+      'CB32':  'linear-gradient(to top, #7c3aed, #c4b5fd)',
+      'CON':   'linear-gradient(to top, #059669, #6ee7b7)',
+      'CAV':   'linear-gradient(to top, #dc2626, #fca5a5)',
+    };
+
     function scadaApp() {
       return {
         darkMode: localStorage.getItem('darkMode') === 'true',
         reservoirs: [],
-        loading: false,
-        pollTimer: null,
+        wsConnected: false,
+        lastUpdate: null,
+        ws: null,
 
-        tankPos: {
-          CIE1:  { x: 30,  y: 30,  w: 110, h: 120 },
-          CIE2:  { x: 170, y: 30,  w: 110, h: 120 },
-          CBIF1: { x: 720, y: 30,  w: 110, h: 120 },
-          CBIF2: { x: 860, y: 30,  w: 110, h: 120 },
-          CB31:  { x: 100, y: 290, w: 110, h: 100 },
-          CB32:  { x: 230, y: 290, w: 110, h: 100 },
-          CON:   { x: 380, y: 430, w: 110, h: 140 },
-          CAV:   { x: 680, y: 430, w: 110, h: 140 }
+        modal: {
+          open: false,
+          alias: '',
+          name: '',
+          online: false,
+          pct: 0,
+          volume_l: null,
+          level_cm: null,
+          rssi: null,
+          ts: null,
+          volume_max_l: null,
+          level_max_cm: null,
+          color: '',
+          manualMode: 'pct',
+          manualValue: '',
+          saving: false,
+          feedback: '',
+          feedbackOk: true,
         },
 
         init() {
-          this.load();
-          this.pollTimer = setInterval(() => this.load(), 30000);
+          this.loadSnapshot();
+          this.connectWS();
         },
 
-        async load() {
-          this.loading = true;
+        async loadSnapshot() {
           try {
             const res = await fetch('/api/reservoirs');
-            if (res.ok) {
-              this.reservoirs = await res.json();
-            }
+            if (res.ok) this.reservoirs = await res.json();
           } catch(e) {
             console.error('SCADA load error:', e);
-          } finally {
-            this.loading = false;
           }
+        },
+
+        connectWS() {
+          const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+          this.ws = new WebSocket(`${protocol}://${location.host}/ws`);
+          this.ws.onopen = () => { this.wsConnected = true; };
+          this.ws.onclose = () => {
+            this.wsConnected = false;
+            setTimeout(() => this.connectWS(), 5000);
+          };
+          this.ws.onmessage = (evt) => {
+            try {
+              const msg = JSON.parse(evt.data);
+              if (msg.type === 'snapshot') {
+                this.reservoirs = msg.data;
+              } else if (msg.type === 'reading') {
+                const idx = this.reservoirs.findIndex(r => r.alias === msg.data.alias);
+                const entry = { ...msg.data, online: true };
+                if (idx >= 0) this.reservoirs[idx] = entry;
+                else this.reservoirs.push(entry);
+                this.reservoirs = [...this.reservoirs];
+                // Atualiza modal se estiver aberto para este alias
+                if (this.modal.open && this.modal.alias === msg.data.alias) {
+                  this._fillModal(entry);
+                }
+              }
+              this.lastUpdate = new Date().toLocaleTimeString('pt-BR');
+            } catch(e) {}
+          };
         },
 
         getReservoir(alias) {
@@ -271,8 +567,102 @@
 
         getTankPct(alias) {
           const r = this.getReservoir(alias);
-          if (!r || !r.online || r.pct === null || r.pct === undefined) return 0;
+          if (!r || r.pct == null) return 0;
           return Math.max(0, Math.min(100, r.pct));
+        },
+
+        getOnline(alias) {
+          const r = this.getReservoir(alias);
+          return r?.online ?? false;
+        },
+
+        getVolume(alias) {
+          const r = this.getReservoir(alias);
+          if (!r || r.volume_l == null) return '—';
+          return Math.round(r.volume_l) + ' L';
+        },
+
+        openModal(alias) {
+          const r = this.getReservoir(alias);
+          this.modal.alias = alias;
+          this.modal.manualMode = 'pct';
+          this.modal.manualValue = '';
+          this.modal.saving = false;
+          this.modal.feedback = '';
+          this._fillModal(r || { alias, online: false });
+          this.modal.open = true;
+        },
+
+        _fillModal(r) {
+          this.modal.name = r.name || r.alias;
+          this.modal.online = r.online ?? false;
+          this.modal.pct = r.pct != null ? Math.max(0, Math.min(100, r.pct)) : 0;
+          this.modal.volume_l = r.volume_l ?? null;
+          this.modal.level_cm = r.level_cm ?? null;
+          this.modal.rssi = r.rssi ?? null;
+          this.modal.ts = r.ts ?? null;
+          this.modal.volume_max_l = r.volume_max_l ?? null;
+          this.modal.level_max_cm = r.level_max_cm ?? null;
+          this.modal.color = ALIAS_COLORS[this.modal.alias] || 'linear-gradient(to top, #3b82f6, #93c5fd)';
+        },
+
+        closeModal() {
+          this.modal.open = false;
+        },
+
+        async submitManual() {
+          if (!this.modal.manualValue) return;
+          this.modal.saving = true;
+          this.modal.feedback = '';
+          try {
+            const body = { alias: this.modal.alias };
+            const val = parseFloat(this.modal.manualValue);
+            if (isNaN(val) || val < 0) throw new Error('Valor inválido');
+            if (this.modal.manualMode === 'pct') body.pct = val;
+            else body.volume_l = val;
+
+            const res = await fetch('/api/readings/manual', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.detail || 'Erro ao salvar');
+
+            // Actualiza localmente
+            const idx = this.reservoirs.findIndex(r => r.alias === this.modal.alias);
+            const updated = {
+              ...(this.reservoirs[idx] || {}),
+              alias: json.alias,
+              pct: json.pct,
+              volume_l: json.volume_l,
+              level_cm: json.level_cm,
+              ts: Math.floor(Date.now() / 1000),
+              online: true,
+            };
+            if (idx >= 0) this.reservoirs[idx] = updated;
+            else this.reservoirs.push(updated);
+            this.reservoirs = [...this.reservoirs];
+            this._fillModal(updated);
+
+            this.modal.feedback = `Salvo: ${json.pct}% · ${Math.round(json.volume_l)} L`;
+            this.modal.feedbackOk = true;
+            this.modal.manualValue = '';
+            this.lastUpdate = new Date().toLocaleTimeString('pt-BR');
+          } catch(e) {
+            this.modal.feedback = e.message || 'Erro ao salvar';
+            this.modal.feedbackOk = false;
+          } finally {
+            this.modal.saving = false;
+          }
+        },
+
+        formatTs(ts) {
+          if (!ts) return '—';
+          return new Date(ts * 1000).toLocaleString('pt-BR', {
+            day: '2-digit', month: '2-digit', year: '2-digit',
+            hour: '2-digit', minute: '2-digit'
+          });
         },
 
         toggleDark() {

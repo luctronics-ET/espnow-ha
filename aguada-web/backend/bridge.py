@@ -31,17 +31,32 @@ for _node_id, _sensors in _raw.items():
         RESERVOIR_INDEX[(_node_id.lower(), _s["sensor_id"])] = _s
 
 
+FLAG_SENSOR_ERROR = 1 << 2
+
+
 def _process_message(raw: dict) -> Optional[dict]:
     """Valida e enriquece uma mensagem do gateway. Retorna dict pronto para DB ou None."""
     try:
-        node_id = raw.get("node", "").lower()
-        sensor_id = int(raw.get("sensor", 0))
-        distance_cm = raw.get("dist")
+        # Só processa pacotes SENSOR
+        if raw.get("type") != "SENSOR":
+            return None
+
+        node_id = raw.get("node_id", "").lower()
+        sensor_id = int(raw.get("sensor_id", 0))
+        distance_cm = raw.get("distance_cm")
         rssi = raw.get("rssi")
         vbat_raw = raw.get("vbat")
         seq = raw.get("seq", 0)
-        ts = raw.get("ts") or int(time.time())
+        # ts < 1e9 significa gateway não sincronizado (uptime em segundos), usa tempo do servidor
+        _ts = raw.get("ts") or 0
+        ts = _ts if _ts > 1_000_000_000 else int(time.time())
         vbat = vbat_raw / 10.0 if vbat_raw is not None else None
+
+        # Descarta leituras com erro de sensor
+        flags = raw.get("flags", 0)
+        if flags & FLAG_SENSOR_ERROR:
+            logger.warning("FLAG_SENSOR_ERROR em node_id=%s sensor=%d — descartado", node_id, sensor_id)
+            return None
 
         params = RESERVOIR_INDEX.get((node_id, sensor_id))
         if params is None:
@@ -137,10 +152,18 @@ class Bridge:
             import serial
             ser = serial.Serial(serial_port, 115200, timeout=2)
             logger.info("Serial aberto: %s", serial_port)
+            self._send_settime(ser)
             self._read_loop(ser)
         except Exception as e:
             logger.warning("Serial indisponível (%s) — modo simulação", e)
             self._sim_loop()
+
+    def _send_settime(self, ser) -> None:
+        """Sincroniza o timestamp do gateway com o servidor."""
+        ts = int(time.time())
+        cmd = json.dumps({"cmd": "SETTIME", "ts": ts}) + "\n"
+        ser.write(cmd.encode())
+        logger.info("SETTIME enviado ao gateway: ts=%d", ts)
 
     def _read_loop(self, ser) -> None:
         while True:
@@ -148,10 +171,15 @@ class Bridge:
                 line = ser.readline().decode("utf-8", errors="replace").strip()
                 if not line:
                     continue
-                raw = json.loads(line)
+                try:
+                    raw = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                # Reenvia SETTIME quando gateway reinicia
+                if raw.get("type") == "GATEWAY_READY":
+                    logger.info("GATEWAY_READY recebido — reenviando SETTIME")
+                    self._send_settime(ser)
                 self._handle(raw)
-            except json.JSONDecodeError:
-                pass
             except Exception as e:
                 logger.error("Erro no read_loop: %s", e)
                 time.sleep(1)
@@ -176,11 +204,13 @@ class Bridge:
                 level = pct / 100 * params["level_max_cm"]
                 distance = params["level_max_cm"] - level + params["sensor_offset_cm"]
                 raw = {
-                    "node": info["node_id"],
-                    "sensor": info["sensor_id"],
-                    "dist": round(distance, 1),
+                    "type": "SENSOR",
+                    "node_id": info["node_id"],
+                    "sensor_id": info["sensor_id"],
+                    "distance_cm": round(distance, 1),
                     "rssi": random.randint(-80, -50),
                     "vbat": random.choice([32, 33, 34]),
+                    "flags": 0,
                     "seq": random.randint(0, 65535),
                     "ts": ts,
                 }

@@ -79,6 +79,10 @@ async def test_get_history_returns_readings(db):
         })
     rows = await get_history(db, alias="CON", since_ts=now - 600)
     assert len(rows) == 5
+    assert rows[0]["distance_cm"] is not None
+    assert rows[0]["rssi"] == -62
+    assert rows[0]["vbat"] == 3.3
+    assert rows[0]["seq"] == 4
 
 @pytest.mark.asyncio
 async def test_get_readings_for_date(db):
@@ -92,3 +96,7 @@ async def test_get_readings_for_date(db):
     })
     rows = await get_readings_for_date(db, alias="CON", date_str=today.isoformat())
     assert len(rows) == 1
+    assert rows[0]["distance_cm"] == 215
+    assert rows[0]["rssi"] == -62
+    assert rows[0]["vbat"] == 3.3
+    assert rows[0]["seq"] == 1

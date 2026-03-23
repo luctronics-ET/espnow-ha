@@ -12,9 +12,10 @@ import aiosqlite
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
-from .bridge import Bridge
-from .db import init_db, get_all_states, get_history, get_readings_for_date
+from .bridge import Bridge, RESERVOIR_INDEX
+from .db import init_db, get_all_states, get_history, get_readings_for_date, insert_reading, upsert_state
 from .calc import calc_consumption_events, decimate_readings
 from .report import generate_daily_report_pdf
 
@@ -183,6 +184,71 @@ async def get_report_pdf(date: str = Query(...)):
         raise HTTPException(404, "Relatório não disponível para esta data")
     return FileResponse(str(out_path), media_type="application/pdf",
                         filename=f"aguada-{date}.pdf")
+
+
+class ManualReadingRequest(BaseModel):
+    alias: str
+    volume_l: Optional[float] = None
+    pct: Optional[float] = None
+    note: Optional[str] = None
+
+
+# Build alias → params index from RESERVOIR_INDEX for manual readings
+_ALIAS_PARAMS: dict[str, dict] = {}
+for (_nid, _sid), _p in RESERVOIR_INDEX.items():
+    _ALIAS_PARAMS[_p["alias"]] = {**_p, "node_id": _nid, "sensor_id": _sid}
+
+
+@app.post("/api/readings/manual")
+async def post_manual_reading(body: ManualReadingRequest):
+    alias = body.alias.upper()
+    params = _ALIAS_PARAMS.get(alias)
+    if params is None:
+        raise HTTPException(400, f"Alias '{alias}' não encontrado")
+
+    volume_max = params["volume_max_l"]
+    level_max = params["level_max_cm"]
+
+    if body.volume_l is not None:
+        volume_l = max(0.0, min(float(body.volume_l), volume_max))
+        pct = round(volume_l / volume_max * 100, 1)
+        level_cm = round(volume_l / volume_max * level_max, 1)
+    elif body.pct is not None:
+        pct = max(0.0, min(float(body.pct), 100.0))
+        volume_l = round(pct / 100 * volume_max, 1)
+        level_cm = round(pct / 100 * level_max, 1)
+    else:
+        raise HTTPException(400, "Forneça volume_l ou pct")
+
+    # distance_cm inverso (para manter consistência — sensor_offset não altera volume manual)
+    distance_cm = round(level_max - level_cm + params["sensor_offset_cm"], 1)
+
+    record = {
+        "ts": int(time.time()),
+        "node_id": params["node_id"],
+        "sensor_id": params["sensor_id"],
+        "alias": alias,
+        "distance_cm": distance_cm,
+        "level_cm": level_cm,
+        "volume_l": volume_l,
+        "pct": pct,
+        "rssi": None,
+        "vbat": None,
+        "seq": None,
+        "name": params["name"],
+        "level_max_cm": level_max,
+        "volume_max_l": volume_max,
+    }
+
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        await insert_reading(conn, record)
+        await upsert_state(conn, record)
+
+    # Notifica WebSocket em tempo real
+    ws_manager.broadcast(record)
+
+    return {"ok": True, "alias": alias, "volume_l": volume_l, "pct": pct, "level_cm": level_cm}
 
 
 @app.websocket("/ws")
