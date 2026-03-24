@@ -3,11 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Aguada — Relatório</title>
-  <script>
-    tailwind.config = { darkMode: 'class' }
-  </script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Aguada — Relatórios</title>
+  <link rel="stylesheet" href="assets/tailwind.css?v=1" />
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
   <style>
     [x-cloak] { display: none; }
@@ -38,6 +35,7 @@
           <a href="abastecimento.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Abastecimento</a>
           <a href="dados.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Dados</a>
           <a href="report.html" class="px-4 py-2 rounded-md text-sm font-medium bg-blue-600 text-white">Relatório</a>
+          <a href="documentacao.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Documentação</a>
         </nav>
         <div class="flex items-center gap-3">
           <button @click="toggleDark()" class="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Alternar tema">
@@ -50,7 +48,20 @@
   </header>
 
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <h1 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">Relatório Diário</h1>
+    <h1 class="text-xl font-semibold mb-3 text-gray-700 dark:text-gray-200">Relatórios</h1>
+
+    <div class="mb-4 flex items-center gap-2">
+      <button @click="activeTab = 'resumo'"
+        :class="activeTab === 'resumo' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
+        class="px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+        Resumo Operacional
+      </button>
+      <button @click="activeTab = 'balanco'"
+        :class="activeTab === 'balanco' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
+        class="px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+        Balanço Hídrico Diário
+      </button>
+    </div>
 
     <!-- Filter Bar -->
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-6 flex flex-wrap items-center gap-4">
@@ -87,7 +98,7 @@
     </div>
 
     <!-- Alerts Section -->
-    <div x-show="alerts.length > 0" class="mb-6">
+    <div x-show="activeTab === 'resumo' && alerts.length > 0" class="mb-6">
       <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
         <div class="flex items-start gap-3">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -111,7 +122,7 @@
     </div>
 
     <!-- Report Table -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+    <div x-show="activeTab === 'resumo'" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
       <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
         <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Resumo dos Reservatórios</h2>
         <span class="text-xs text-gray-400 dark:text-gray-500" x-text="rows.length + ' reservatórios'"></span>
@@ -167,6 +178,71 @@
         </table>
       </div>
     </div>
+
+    <!-- Balanço Hídrico Diário -->
+    <div x-show="activeTab === 'balanco'" class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+          <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Abastecimento estimado</div>
+          <div class="text-2xl font-bold text-green-600 dark:text-green-400" x-text="formatSigned(totalSupplied()) + ' L'"></div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+          <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Consumo estimado</div>
+          <div class="text-2xl font-bold text-red-600 dark:text-red-400" x-text="formatSigned(-totalConsumed()) + ' L'"></div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+          <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Balanço estimado</div>
+          <div class="text-2xl font-bold" :class="totalBalance() >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-yellow-600 dark:text-yellow-400'" x-text="formatSigned(totalBalance()) + ' L'"></div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+          <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Reservatórios com evento</div>
+          <div class="text-2xl font-bold text-gray-800 dark:text-gray-100" x-text="dailyRows().filter(r => r.events_count > 0).length"></div>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Balanço por Reservatório</h2>
+          <span class="text-xs text-gray-400 dark:text-gray-500">Baseado nos eventos do dia selecionado</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 dark:bg-gray-700/50 text-xs uppercase text-gray-500 dark:text-gray-400 tracking-wide">
+                <th class="px-4 py-3 text-left">Local</th>
+                <th class="px-4 py-3 text-right">Consumo (L)</th>
+                <th class="px-4 py-3 text-right">Abastecimento (L)</th>
+                <th class="px-4 py-3 text-right">Balanço (L)</th>
+                <th class="px-4 py-3 text-right">Eventos</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+              <template x-for="(row, i) in dailyRows()" :key="row.alias + '-' + i">
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                  <td class="px-4 py-2.5">
+                    <div class="font-semibold text-gray-800 dark:text-gray-100" x-text="row.name || row.alias"></div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400" x-text="row.alias"></div>
+                  </td>
+                  <td class="px-4 py-2.5 text-right font-mono text-red-600 dark:text-red-400" x-text="formatSigned(-row.consumed_l)"></td>
+                  <td class="px-4 py-2.5 text-right font-mono text-green-600 dark:text-green-400" x-text="formatSigned(row.supplied_l)"></td>
+                  <td class="px-4 py-2.5 text-right font-mono" :class="row.balance_l >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-yellow-600 dark:text-yellow-400'" x-text="formatSigned(row.balance_l)"></td>
+                  <td class="px-4 py-2.5 text-right text-gray-500 dark:text-gray-400" x-text="row.events_count"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+        <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2">Critérios de detecção (referência técnica)</h3>
+        <ul class="text-sm text-gray-600 dark:text-gray-300 list-disc ml-5 space-y-1">
+          <li><strong>Balanço = volume final - volume inicial</strong> (positivo: entrada; negativo: saída/consumo).</li>
+          <li><strong>Alerta</strong>: consumo do dia acima de 20% da média histórica.</li>
+          <li><strong>Crítico</strong>: consumo do dia acima de 50% da média histórica.</li>
+        </ul>
+      </div>
+    </div>
   </main>
 
   <script>
@@ -174,6 +250,7 @@
       const today = new Date().toISOString().slice(0, 10);
       return {
         darkMode: localStorage.getItem('darkMode') === 'true',
+        activeTab: 'resumo',
         date: today,
         rows: [],
         alerts: [],
@@ -211,6 +288,46 @@
           } finally {
             this.loading = false;
           }
+        }
+,
+
+        dailyRows() {
+          return this.rows.map((r) => {
+            const events = Array.isArray(r.events) ? r.events : [];
+            const consumed_l = events
+              .filter((e) => e.type === 'consumption')
+              .reduce((sum, e) => sum + Math.abs(Number(e.delta_l || 0)), 0);
+            const supplied_l = events
+              .filter((e) => e.type === 'supply')
+              .reduce((sum, e) => sum + Number(e.delta_l || 0), 0);
+            return {
+              alias: r.alias,
+              name: r.name,
+              consumed_l: Math.round(consumed_l),
+              supplied_l: Math.round(supplied_l),
+              balance_l: Math.round(supplied_l - consumed_l),
+              events_count: events.length,
+            };
+          });
+        },
+
+        totalConsumed() {
+          return this.dailyRows().reduce((sum, r) => sum + r.consumed_l, 0);
+        },
+
+        totalSupplied() {
+          return this.dailyRows().reduce((sum, r) => sum + r.supplied_l, 0);
+        },
+
+        totalBalance() {
+          return this.totalSupplied() - this.totalConsumed();
+        },
+
+        formatSigned(value) {
+          const num = Number(value || 0);
+          if (num > 0) return `+${num.toLocaleString('pt-BR')}`;
+          if (num < 0) return `${num.toLocaleString('pt-BR')}`;
+          return '0';
         }
       };
     }

@@ -8,17 +8,6 @@
 
 static const char *TAG = "gw_espnow";
 static gw_recv_cb_t s_recv_cb = nullptr;
-static volatile uint32_t s_rx_crc_failures = 0;
-static volatile uint32_t s_tx_send_ok = 0;
-static volatile uint32_t s_tx_send_fail = 0;
-
-static inline void counter_inc(volatile uint32_t *value) {
-    __atomic_add_fetch(value, 1U, __ATOMIC_RELAXED);
-}
-
-static inline uint32_t counter_load(const volatile uint32_t *value) {
-    return __atomic_load_n(value, __ATOMIC_RELAXED);
-}
 
 static void on_recv(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
     if (len != sizeof(espnow_packet_t)) return;
@@ -28,7 +17,6 @@ static void on_recv(const esp_now_recv_info_t *info, const uint8_t *data, int le
 
     uint16_t expected = crc16_ccitt((const uint8_t *)&pkt, 14);
     if (pkt.crc != expected) {
-        counter_inc(&s_rx_crc_failures);
         ESP_LOGW(TAG, "CRC fail node=0x%04X got=0x%04X exp=0x%04X",
                  pkt.node_id, pkt.crc, expected);
         return;
@@ -62,17 +50,5 @@ esp_err_t gw_espnow_send(const espnow_packet_t *pkt, const uint8_t *dest_mac) {
     }
     espnow_packet_t p = *pkt;
     p.crc = crc16_ccitt((const uint8_t *)&p, 14);
-    esp_err_t err = esp_now_send(dest_mac, (const uint8_t *)&p, sizeof(p));
-    if (err == ESP_OK) counter_inc(&s_tx_send_ok);
-    else counter_inc(&s_tx_send_fail);
-    return err;
-}
-
-gw_espnow_stats_t gw_espnow_get_stats(void) {
-    gw_espnow_stats_t stats = {
-        .rx_crc_failures = counter_load(&s_rx_crc_failures),
-        .tx_send_ok = counter_load(&s_tx_send_ok),
-        .tx_send_fail = counter_load(&s_tx_send_fail),
-    };
-    return stats;
+    return esp_now_send(dest_mac, (const uint8_t *)&p, sizeof(p));
 }

@@ -4,10 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Aguada — SCADA</title>
-  <script>
-    tailwind.config = { darkMode: 'class' }
-  </script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/tailwind.css?v=1" />
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
   <style>
     [x-cloak] { display: none; }
@@ -40,6 +37,7 @@
           <a href="abastecimento.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Abastecimento</a>
           <a href="dados.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Dados</a>
           <a href="report.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Relatório</a>
+          <a href="documentacao.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Documentação</a>
         </nav>
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -69,46 +67,46 @@
             Continente
           </div>
 
-          <!-- Container CBIF -->
-          <div class="border-2 border-blue-200 dark:border-blue-900 rounded-xl bg-blue-50 dark:bg-blue-950/30 p-4 w-48">
-            <div class="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-3 text-center">
-              Casa Bombas IF
-            </div>
-            <div class="flex gap-2 justify-center">
-              <template x-for="alias in ['CBIF1','CBIF2']" :key="alias">
-                <div class="flex flex-col items-center">
+          <div class="flex flex-col gap-2">
+            <template x-for="alias in ['CBIF1','CBIF2']" :key="alias">
+              <div class="border-2 rounded-xl p-2 flex items-center gap-2 tank-btn w-52"
+                   :class="getOnline(alias) ? 'border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30' : 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700/30'"
+                   @click="openModal(alias)">
+                <div>
+                  <div class="text-xs font-bold uppercase tracking-wide leading-tight"
+                       :class="getOnline(alias) ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'">Casa Bombas<br>IF</div>
+                  <div class="text-xs flex items-center gap-1 mt-1"
+                       :class="getOnline(alias) ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400'">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm1 11H9v-2h2v2zm0-4H9V7h2v2z"/></svg>
+                    Bombeamento
+                  </div>
+                </div>
+                <div class="flex flex-col items-center ml-auto">
                   <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1" x-text="alias"></div>
-                  <div class="relative w-14 rounded-md overflow-hidden border tank-btn"
-                       :class="getOnline(alias) ? 'border-gray-300 dark:border-gray-600' : 'border-gray-300 dark:border-gray-600 opacity-70'"
-                       style="height:64px;"
-                       :style="getOnline(alias) ? 'background:#e5e7eb' : 'background:#d1d5db'"
-                       @click="openModal(alias)">
-                    <!-- Preenchimento (cor se online, cinza se offline) -->
+                  <div class="relative w-12 rounded-md overflow-hidden border border-gray-300 dark:border-gray-600" style="height:52px;"
+                       :style="getOnline(alias) ? 'background:#e5e7eb' : 'background:#d1d5db'">
                     <div class="absolute bottom-0 left-0 right-0 transition-all duration-700 rounded-b-sm"
                          :style="getOnline(alias)
                            ? `height:${getTankPct(alias)}%; background: linear-gradient(to top, #2563eb, #60a5fa);`
                            : `height:${getTankPct(alias)}%; background: linear-gradient(to top, #6b7280, #9ca3af);`">
                     </div>
-                    <!-- Overlay Offline -->
                     <div x-show="!getOnline(alias)" class="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
-                      <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728M5.636 5.636a9 9 0 000 12.728M9 10a3 3 0 116 0"/></svg>
+                      <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728M5.636 5.636a9 9 0 000 12.728M9 10a3 3 0 116 0"/></svg>
                       <span class="text-xs font-bold text-gray-400">Off</span>
                     </div>
-                    <!-- Porcentagem se online -->
                     <div x-show="getOnline(alias)" class="absolute inset-0 flex items-center justify-center">
                       <span class="text-xs font-bold drop-shadow"
                             :class="getTankPct(alias) > 30 ? 'text-white' : 'text-gray-700'"
                             x-text="getTankPct(alias) + '%'"></span>
                     </div>
-                    <!-- Ícone de inserção manual (offline) -->
                     <div x-show="!getOnline(alias)" class="absolute top-0.5 right-0.5">
                       <svg class="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
                     </div>
                   </div>
                   <div class="text-xs text-gray-400 mt-1" x-text="getOnline(alias) ? getVolume(alias) : 'offline'"></div>
                 </div>
-              </template>
-            </div>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -142,24 +140,31 @@
           <div class="flex items-center gap-0 flex-1">
 
             <!-- CIE -->
-            <div class="border-2 border-cyan-200 dark:border-cyan-900 rounded-xl bg-cyan-50 dark:bg-cyan-950/30 p-3 flex-shrink-0">
-              <div class="text-xs font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-wide mb-2 text-center">Cisterna IE</div>
-              <div class="flex gap-2 justify-center">
-                <template x-for="alias in ['CIE1','CIE2']" :key="alias">
-                  <div class="flex flex-col items-center">
+            <div class="flex flex-col gap-2 flex-shrink-0">
+              <template x-for="alias in ['CIE1','CIE2']" :key="alias">
+                <div class="border-2 rounded-xl p-2 flex items-center gap-2 tank-btn w-48"
+                     :class="getOnline(alias) ? 'border-cyan-200 dark:border-cyan-900 bg-cyan-50 dark:bg-cyan-950/30' : 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700/30'"
+                     @click="openModal(alias)">
+                  <div>
+                    <div class="text-xs font-bold uppercase tracking-wide leading-tight"
+                         :class="getOnline(alias) ? 'text-cyan-600 dark:text-cyan-400' : 'text-gray-400 dark:text-gray-500'">Cisterna<br>IE</div>
+                    <div class="text-xs flex items-center gap-1 mt-1"
+                         :class="getOnline(alias) ? 'text-cyan-500 dark:text-cyan-400' : 'text-gray-400'">
+                      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm1 11H9v-2h2v2zm0-4H9V7h2v2z"/></svg>
+                      Equalização
+                    </div>
+                  </div>
+                  <div class="flex flex-col items-center ml-auto">
                     <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1" x-text="alias"></div>
-                    <div class="relative w-12 rounded-md overflow-hidden border tank-btn"
-                         :class="getOnline(alias) ? 'border-gray-300 dark:border-gray-600' : 'border-gray-300 dark:border-gray-600 opacity-70'"
-                         style="height:60px;"
-                         :style="getOnline(alias) ? 'background:#e5e7eb' : 'background:#d1d5db'"
-                         @click="openModal(alias)">
+                    <div class="relative w-12 rounded-md overflow-hidden border border-gray-300 dark:border-gray-600" style="height:52px;"
+                         :style="getOnline(alias) ? 'background:#e5e7eb' : 'background:#d1d5db'">
                       <div class="absolute bottom-0 left-0 right-0 transition-all duration-700 rounded-b-sm"
                            :style="getOnline(alias)
                              ? `height:${getTankPct(alias)}%; background: linear-gradient(to top, #0891b2, #67e8f9);`
                              : `height:${getTankPct(alias)}%; background: linear-gradient(to top, #6b7280, #9ca3af);`">
                       </div>
                       <div x-show="!getOnline(alias)" class="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
-                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728M5.636 5.636a9 9 0 000 12.728M9 10a3 3 0 116 0"/></svg>
+                        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728M5.636 5.636a9 9 0 000 12.728M9 10a3 3 0 116 0"/></svg>
                         <span class="text-xs font-bold text-gray-400">Off</span>
                       </div>
                       <div x-show="getOnline(alias)" class="absolute inset-0 flex items-center justify-center">
@@ -173,8 +178,8 @@
                     </div>
                     <div class="text-xs text-gray-400 mt-1 text-center" x-text="getOnline(alias) ? getVolume(alias) : 'offline'"></div>
                   </div>
-                </template>
-              </div>
+                </div>
+              </template>
             </div>
 
             <!-- Seta CIE → CB3 -->
@@ -186,24 +191,31 @@
             </div>
 
             <!-- CB3 -->
-            <div class="border-2 border-violet-200 dark:border-violet-900 rounded-xl bg-violet-50 dark:bg-violet-950/30 p-3 flex-shrink-0">
-              <div class="text-xs font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wide mb-2 text-center">Casa Bombas Nº3</div>
-              <div class="flex gap-2 justify-center">
-                <template x-for="alias in ['CB31','CB32']" :key="alias">
-                  <div class="flex flex-col items-center">
+            <div class="flex flex-col gap-2 flex-shrink-0">
+              <template x-for="alias in ['CB31','CB32']" :key="alias">
+                <div class="border-2 rounded-xl p-2 flex items-center gap-2 tank-btn w-48"
+                     :class="getOnline(alias) ? 'border-violet-200 dark:border-violet-900 bg-violet-50 dark:bg-violet-950/30' : 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700/30'"
+                     @click="openModal(alias)">
+                  <div>
+                    <div class="text-xs font-bold uppercase tracking-wide leading-tight"
+                         :class="getOnline(alias) ? 'text-violet-600 dark:text-violet-400' : 'text-gray-400 dark:text-gray-500'">Casa Bombas<br>Nº3</div>
+                    <div class="text-xs flex items-center gap-1 mt-1"
+                         :class="getOnline(alias) ? 'text-violet-500 dark:text-violet-400' : 'text-gray-400'">
+                      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm1 11H9v-2h2v2zm0-4H9V7h2v2z"/></svg>
+                      Transferência
+                    </div>
+                  </div>
+                  <div class="flex flex-col items-center ml-auto">
                     <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1" x-text="alias"></div>
-                    <div class="relative w-12 rounded-md overflow-hidden border tank-btn"
-                         :class="getOnline(alias) ? 'border-gray-300 dark:border-gray-600' : 'border-gray-300 dark:border-gray-600 opacity-70'"
-                         style="height:56px;"
-                         :style="getOnline(alias) ? 'background:#e5e7eb' : 'background:#d1d5db'"
-                         @click="openModal(alias)">
+                    <div class="relative w-12 rounded-md overflow-hidden border border-gray-300 dark:border-gray-600" style="height:52px;"
+                         :style="getOnline(alias) ? 'background:#e5e7eb' : 'background:#d1d5db'">
                       <div class="absolute bottom-0 left-0 right-0 transition-all duration-700 rounded-b-sm"
                            :style="getOnline(alias)
                              ? `height:${getTankPct(alias)}%; background: linear-gradient(to top, #7c3aed, #c4b5fd);`
                              : `height:${getTankPct(alias)}%; background: linear-gradient(to top, #6b7280, #9ca3af);`">
                       </div>
                       <div x-show="!getOnline(alias)" class="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
-                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728M5.636 5.636a9 9 0 000 12.728M9 10a3 3 0 116 0"/></svg>
+                        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728M5.636 5.636a9 9 0 000 12.728M9 10a3 3 0 116 0"/></svg>
                         <span class="text-xs font-bold text-gray-400">Off</span>
                       </div>
                       <div x-show="getOnline(alias)" class="absolute inset-0 flex items-center justify-center">
@@ -217,8 +229,8 @@
                     </div>
                     <div class="text-xs text-gray-400 mt-1 text-center" x-text="getOnline(alias) ? getVolume(alias) : 'offline'"></div>
                   </div>
-                </template>
-              </div>
+                </div>
+              </template>
             </div>
 
             <!-- Bifurcação CB3 → CON (cima) e CAV (baixo) -->

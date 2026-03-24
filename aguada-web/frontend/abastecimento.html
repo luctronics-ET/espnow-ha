@@ -4,8 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Aguada — Abastecimento</title>
-  <script>tailwind.config = { darkMode: 'class' }</script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/tailwind.css?v=1" />
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
   <style>[x-cloak]{display:none}</style>
 </head>
@@ -26,6 +25,7 @@
           <a href="abastecimento.html" class="px-4 py-2 rounded-md text-sm font-medium bg-blue-600 text-white">Abastecimento</a>
           <a href="dados.html"         class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Dados</a>
           <a href="report.html"        class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Relatório</a>
+           <a href="documentacao.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Documentação</a>
         </nav>
         <button @click="toggleDark()" class="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">
           <svg x-show="!darkMode" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
@@ -279,7 +279,8 @@
       renderChart(results) {
         if (typeof Chart === 'undefined') return;
         const canvas = document.getElementById('chartSupply');
-        if (!canvas) return;
+        const ctx = canvas?.getContext?.('2d');
+        if (!ctx) return;
         if (this.chart) { this.chart.destroy(); }
 
         // Gera labels dos últimos 7 dias
@@ -320,7 +321,7 @@
         const grid = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
         const text = isDark ? '#9ca3af' : '#6b7280';
 
-        this.chart = new Chart(canvas.getContext('2d'), {
+        this.chart = new Chart(ctx, {
           type: 'line',
           data: { labels: days, datasets },
           options: {

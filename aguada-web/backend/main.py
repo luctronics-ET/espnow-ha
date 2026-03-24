@@ -15,7 +15,22 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .bridge import Bridge, RESERVOIR_INDEX
-from .db import init_db, get_all_states, get_history, get_readings_for_date, insert_reading, upsert_state
+from .db import (
+    init_db,
+    get_all_states,
+    get_history,
+    get_readings_for_date,
+    insert_reading,
+    upsert_state,
+    insert_manual_hydrometer_reading,
+    insert_manual_pump_log,
+    insert_manual_valve_log,
+    insert_manual_reservoir_log,
+    get_manual_hydrometer_history,
+    get_manual_pump_logs,
+    get_manual_valve_logs,
+    get_manual_reservoir_logs,
+)
 from .calc import calc_consumption_events, decimate_readings
 from .report import generate_daily_report_pdf
 
@@ -193,6 +208,39 @@ class ManualReadingRequest(BaseModel):
     note: Optional[str] = None
 
 
+class ManualHydrometerRequest(BaseModel):
+    meter_name: str
+    reading: float
+    unit: str = "m3"
+    ts: Optional[int] = None
+    note: Optional[str] = None
+
+
+class ManualPumpRequest(BaseModel):
+    pump_name: str
+    state: str  # ligada | desligada | falha | manutencao
+    mode: str = "manual"
+    ts: Optional[int] = None
+    note: Optional[str] = None
+
+
+class ManualValveRequest(BaseModel):
+    valve_name: str
+    state: str  # aberta | fechada | parcial | falha
+    ts: Optional[int] = None
+    note: Optional[str] = None
+
+
+class ManualReservoirRequest(BaseModel):
+    reservoir_name: str
+    has_sensor: bool = False
+    level_cm: Optional[float] = None
+    volume_l: Optional[float] = None
+    pct: Optional[float] = None
+    ts: Optional[int] = None
+    note: Optional[str] = None
+
+
 # Build alias → params index from RESERVOIR_INDEX for manual readings
 _ALIAS_PARAMS: dict[str, dict] = {}
 for (_nid, _sid), _p in RESERVOIR_INDEX.items():
@@ -249,6 +297,113 @@ async def post_manual_reading(body: ManualReadingRequest):
     ws_manager.broadcast(record)
 
     return {"ok": True, "alias": alias, "volume_l": volume_l, "pct": pct, "level_cm": level_cm}
+
+
+@app.post("/api/manual/hydrometers")
+async def post_manual_hydrometer(body: ManualHydrometerRequest):
+    meter_name = body.meter_name.strip()
+    if not meter_name:
+        raise HTTPException(400, "meter_name é obrigatório")
+    item = {
+        "ts": int(body.ts or time.time()),
+        "meter_name": meter_name,
+        "reading": float(body.reading),
+        "unit": (body.unit or "m3").strip() or "m3",
+        "note": body.note,
+    }
+    async with aiosqlite.connect(DB_PATH) as conn:
+        await insert_manual_hydrometer_reading(conn, item)
+    return {"ok": True, **item}
+
+
+@app.get("/api/manual/hydrometers")
+async def get_manual_hydrometers(meter_name: Optional[str] = Query(None), limit: int = Query(200, ge=1, le=1000)):
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        rows = await get_manual_hydrometer_history(conn, meter_name=meter_name, limit=limit)
+    return {"items": rows}
+
+
+@app.post("/api/manual/pumps")
+async def post_manual_pump(body: ManualPumpRequest):
+    pump_name = body.pump_name.strip()
+    if not pump_name:
+        raise HTTPException(400, "pump_name é obrigatório")
+    state = body.state.strip().lower()
+    if state not in {"ligada", "desligada", "falha", "manutencao"}:
+        raise HTTPException(400, "state inválido")
+    item = {
+        "ts": int(body.ts or time.time()),
+        "pump_name": pump_name,
+        "state": state,
+        "mode": (body.mode or "manual").strip() or "manual",
+        "note": body.note,
+    }
+    async with aiosqlite.connect(DB_PATH) as conn:
+        await insert_manual_pump_log(conn, item)
+    return {"ok": True, **item}
+
+
+@app.get("/api/manual/pumps")
+async def get_manual_pumps(limit: int = Query(200, ge=1, le=1000)):
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        rows = await get_manual_pump_logs(conn, limit=limit)
+    return {"items": rows}
+
+
+@app.post("/api/manual/valves")
+async def post_manual_valve(body: ManualValveRequest):
+    valve_name = body.valve_name.strip()
+    if not valve_name:
+        raise HTTPException(400, "valve_name é obrigatório")
+    state = body.state.strip().lower()
+    if state not in {"aberta", "fechada", "parcial", "falha"}:
+        raise HTTPException(400, "state inválido")
+    item = {
+        "ts": int(body.ts or time.time()),
+        "valve_name": valve_name,
+        "state": state,
+        "note": body.note,
+    }
+    async with aiosqlite.connect(DB_PATH) as conn:
+        await insert_manual_valve_log(conn, item)
+    return {"ok": True, **item}
+
+
+@app.get("/api/manual/valves")
+async def get_manual_valves(limit: int = Query(200, ge=1, le=1000)):
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        rows = await get_manual_valve_logs(conn, limit=limit)
+    return {"items": rows}
+
+
+@app.post("/api/manual/reservoirs")
+async def post_manual_reservoir(body: ManualReservoirRequest):
+    reservoir_name = body.reservoir_name.strip()
+    if not reservoir_name:
+        raise HTTPException(400, "reservoir_name é obrigatório")
+    item = {
+        "ts": int(body.ts or time.time()),
+        "reservoir_name": reservoir_name,
+        "has_sensor": 1 if body.has_sensor else 0,
+        "level_cm": body.level_cm,
+        "volume_l": body.volume_l,
+        "pct": body.pct,
+        "note": body.note,
+    }
+    async with aiosqlite.connect(DB_PATH) as conn:
+        await insert_manual_reservoir_log(conn, item)
+    return {"ok": True, **item}
+
+
+@app.get("/api/manual/reservoirs")
+async def get_manual_reservoirs(limit: int = Query(200, ge=1, le=1000)):
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        rows = await get_manual_reservoir_logs(conn, limit=limit)
+    return {"items": rows}
 
 
 @app.websocket("/ws")

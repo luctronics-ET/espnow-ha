@@ -4,10 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Aguada — Histórico</title>
-  <script>
-    tailwind.config = { darkMode: 'class' }
-  </script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/tailwind.css?v=1" />
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
   <style>
     [x-cloak] { display: none; }
@@ -39,6 +36,7 @@
           <a href="abastecimento.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Abastecimento</a>
           <a href="dados.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Dados</a>
           <a href="report.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Relatório</a>
+          <a href="documentacao.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Documentação</a>
         </nav>
         <div class="flex items-center gap-3">
           <button @click="toggleDark()" class="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Alternar tema">
@@ -80,6 +78,17 @@
         </template>
       </div>
 
+      <div class="flex items-center gap-1">
+        <span class="text-sm font-medium text-gray-600 dark:text-gray-300 mr-1">Linhas</span>
+        <template x-for="limit in rowLimitOptions" :key="limit">
+          <button @click="setRowLimit(limit)"
+            :class="rowLimit === limit ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
+            class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+            x-text="limit">
+          </button>
+        </template>
+      </div>
+
       <div x-show="loading" class="ml-auto flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
         <svg class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -104,7 +113,7 @@
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
       <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
         <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Leituras</h2>
-        <span class="text-xs text-gray-400 dark:text-gray-500" x-text="rows.length > 100 ? 'Mostrando 100 de ' + rows.length : rows.length + ' registros'"></span>
+        <span class="text-xs text-gray-400 dark:text-gray-500" x-text="summaryText()"></span>
       </div>
 
       <div x-show="rows.length === 0 && !loading" class="p-8 text-center text-gray-400 dark:text-gray-600">
@@ -122,7 +131,7 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-            <template x-for="(row, i) in rows.slice(0,100)" :key="i">
+            <template x-for="(row, i) in visibleTableRows()" :key="`${row.ts ?? 'row'}-${i}`">
               <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                 <td class="px-4 py-2.5 text-gray-600 dark:text-gray-300" x-text="formatTs(row.ts)"></td>
                 <td class="px-4 py-2.5 text-right font-mono" x-text="row.level_cm != null ? row.level_cm : '—'"></td>
@@ -150,13 +159,16 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script>
     function historyApp() {
+      const chartStore = { instance: null };
       return {
         darkMode: localStorage.getItem('darkMode') === 'true',
         alias: 'CON',
         period: '24h',
+        rowLimit: 50,
+        rowLimitOptions: [50, 100, 200],
         rows: [],
+        chartRows: [],
         loading: false,
-        chart: null,
         chartReady: false,
 
         init() {
@@ -166,15 +178,25 @@
         toggleDark() {
           this.darkMode = !this.darkMode;
           localStorage.setItem('darkMode', this.darkMode);
+          if (this.rows.length > 0) {
+            this.$nextTick(() => this.renderChart());
+          }
+        },
+
+        setRowLimit(limit) {
+          this.rowLimit = limit;
         },
 
         async load() {
           this.loading = true;
           try {
-            const res = await fetch(`/api/history/${encodeURIComponent(this.alias)}?period=${this.period}`);
+            const fetchPeriod = this.period === '24h' ? '7d' : this.period;
+            const res = await fetch(`/api/history/${encodeURIComponent(this.alias)}?period=${fetchPeriod}`);
             if (res.ok) {
-              this.rows = await res.json() || [];
-              this.chartReady = this.rows.length > 0;
+              const rawRows = await res.json() || [];
+              this.rows = this.filterRowsForCurrentPeriod(rawRows);
+              this.chartRows = this.buildFixedSeries(this.rows);
+              this.chartReady = this.chartRows.some(r => r.volume_l != null);
               this.$nextTick(() => this.renderChart());
             }
           } catch(e) {
@@ -185,8 +207,19 @@
         },
 
         renderChart() {
-          if (this.rows.length === 0) {
-            if (this.chart) { this.chart.destroy(); this.chart = null; }
+          const visibleRows = this.chartRows;
+
+          if (visibleRows.length === 0) {
+            if (chartStore.instance) {
+              try {
+                chartStore.instance.stop();
+                chartStore.instance.destroy();
+              } catch (e) {
+                console.warn('Falha ao destruir gráfico de histórico:', e);
+              } finally {
+                chartStore.instance = null;
+              }
+            }
             return;
           }
 
@@ -196,21 +229,61 @@
           }
 
           const canvas = document.getElementById('historyChart');
-          if (!canvas) return;
-
-          if (this.chart) { this.chart.destroy(); this.chart = null; }
+          const ctx = canvas?.getContext?.('2d');
+          if (!ctx) return;
 
           const isDark = this.darkMode;
           const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
           const textColor = isDark ? '#9ca3af' : '#6b7280';
 
-          const labels = this.rows.map(r => {
+          const labels = visibleRows.map(r => {
             const d = new Date(r.ts * 1000);
-            return d.toLocaleString('pt-BR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            return d.toLocaleString('pt-BR', { day: '2-digit', hour: '2-digit', minute: '2-digit' });
           });
-          const data = this.rows.map(r => r.volume_l != null ? Math.round(r.volume_l) : null);
+          const data = visibleRows.map(r => r.volume_l != null ? Math.round(r.volume_l) : null);
 
-          this.chart = new Chart(canvas.getContext('2d'), {
+          const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { labels: { color: textColor, font: { size: 12 } } },
+              tooltip: { mode: 'index' }
+            },
+            scales: {
+              x: {
+                ticks: { color: textColor, maxTicksLimit: 10, maxRotation: 30 },
+                grid: { color: gridColor }
+              },
+              y: {
+                ticks: { color: textColor },
+                grid: { color: gridColor },
+                title: { display: true, text: 'Volume (L)', color: textColor }
+              }
+            }
+          };
+
+          if (chartStore.instance) {
+            chartStore.instance.data.labels = labels;
+            chartStore.instance.data.datasets[0] = {
+              ...chartStore.instance.data.datasets[0],
+              label: `Volume (L) — ${this.alias}`,
+              data,
+              borderColor: '#3b82f6',
+              backgroundColor: 'rgba(59,130,246,0.15)',
+              borderWidth: 2,
+              pointRadius: visibleRows.length > 200 ? 0 : 2,
+              tension: 0.3,
+              fill: true,
+              spanGaps: true
+            };
+            chartStore.instance.options = chartOptions;
+            chartStore.instance.update('none');
+            return;
+          }
+
+          chartStore.instance = new Chart(ctx, {
             type: 'line',
             data: {
               labels,
@@ -220,33 +293,96 @@
                 borderColor: '#3b82f6',
                 backgroundColor: 'rgba(59,130,246,0.15)',
                 borderWidth: 2,
-                pointRadius: this.rows.length > 200 ? 0 : 2,
+                pointRadius: visibleRows.length > 200 ? 0 : 2,
                 tension: 0.3,
                 fill: true,
                 spanGaps: true
               }]
             },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              interaction: { mode: 'index', intersect: false },
-              plugins: {
-                legend: { labels: { color: textColor, font: { size: 12 } } },
-                tooltip: { mode: 'index' }
-              },
-              scales: {
-                x: {
-                  ticks: { color: textColor, maxTicksLimit: 10, maxRotation: 30 },
-                  grid: { color: gridColor }
-                },
-                y: {
-                  ticks: { color: textColor },
-                  grid: { color: gridColor },
-                  title: { display: true, text: 'Volume (L)', color: textColor }
-                }
-              }
-            }
+            options: chartOptions
           });
+        },
+
+        getPeriodConfig() {
+          const now = new Date();
+          if (this.period === '24h') {
+            // Janela operacional: 06:00 do dia atual até 06:00 do dia seguinte.
+            const start = new Date(now);
+            start.setHours(6, 0, 0, 0);
+            const end = new Date(start.getTime() + 24 * 3600 * 1000);
+            return { startTs: Math.floor(start.getTime() / 1000), endTs: Math.floor(end.getTime() / 1000), points: 49 };
+          }
+          if (this.period === '7d') {
+            const end = Math.floor(now.getTime() / 1000);
+            const start = end - (7 * 24 * 3600);
+            return { startTs: start, endTs: end, points: 169 };
+          }
+          const end = Math.floor(now.getTime() / 1000);
+          const start = end - (30 * 24 * 3600);
+          return { startTs: start, endTs: end, points: 241 };
+        },
+
+        buildFixedSeries(rawRows) {
+          const ordered = [...(rawRows || [])]
+            .filter(r => Number.isFinite(r?.ts))
+            .sort((a, b) => a.ts - b.ts);
+
+          const { startTs, endTs, points } = this.getPeriodConfig();
+          if (points <= 1 || endTs <= startTs) return [];
+
+          const step = (endTs - startTs) / (points - 1);
+          const fixed = [];
+          let cursor = 0;
+
+          for (let i = 0; i < points; i++) {
+            const targetTs = i === points - 1 ? endTs : Math.round(startTs + i * step);
+
+            const slotStart = i === 0
+              ? startTs
+              : Math.round(startTs + (i - 1) * step);
+            const slotEnd = targetTs;
+
+            let slotReading = null;
+            while (cursor < ordered.length && ordered[cursor].ts <= slotEnd) {
+              if (ordered[cursor].ts >= slotStart) {
+                slotReading = ordered[cursor];
+              }
+              cursor += 1;
+            }
+
+            fixed.push({
+              ts: targetTs,
+              level_cm: slotReading?.level_cm ?? null,
+              volume_l: slotReading?.volume_l ?? null,
+              pct: slotReading?.pct ?? null
+            });
+          }
+
+          return fixed;
+        },
+
+        filterRowsForCurrentPeriod(rawRows) {
+          const { startTs, endTs } = this.getPeriodConfig();
+          return [...(rawRows || [])]
+            .filter(r => Number.isFinite(r?.ts) && r.ts >= startTs && r.ts <= endTs)
+            .sort((a, b) => a.ts - b.ts);
+        },
+
+        visibleRows() {
+          return this.rows.slice(0, this.rowLimit);
+        },
+
+        visibleTableRows() {
+          return [...this.rows]
+            .sort((a, b) => (b?.ts ?? 0) - (a?.ts ?? 0))
+            .slice(0, this.rowLimit);
+        },
+
+        summaryText() {
+          const shown = Math.min(this.rowLimit, this.rows.length);
+          return this.rows.length > this.rowLimit
+            ? `Mostrando ${shown} de ${this.rows.length} registros`
+            : `${this.rows.length} registros`;
         },
 
         formatTs(ts) {

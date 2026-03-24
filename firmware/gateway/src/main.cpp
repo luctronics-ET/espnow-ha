@@ -8,9 +8,8 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
-#include <esp_err.h>
-#include <esp_mac.h>
 #include <esp_timer.h>
+#include <esp_wifi.h>
 #include <esp_log.h>
 #include <ArduinoJson.h>
 #include <string.h>
@@ -21,161 +20,9 @@
 
 static const char *TAG = "gw";
 
-#if defined(LED_BUILTIN)
-static const int GATEWAY_LED_PIN = LED_BUILTIN;
-#elif defined(CONFIG_IDF_TARGET_ESP32C3)
-static const int GATEWAY_LED_PIN = 8;
-#elif defined(CONFIG_IDF_TARGET_ESP32)
-static const int GATEWAY_LED_PIN = 2;
-#else
-static const int GATEWAY_LED_PIN = -1;
-#endif
-
-// ── LED patterns (non-blocking) ──────────────────────────────────────────────
-typedef struct {
-    uint8_t  blinks;
-    uint16_t on_ms;
-    uint16_t off_ms;
-} led_pattern_t;
-
-#define LED_QUEUE_LEN 24
-static led_pattern_t s_led_q[LED_QUEUE_LEN];
-static uint8_t s_led_q_head = 0;
-static uint8_t s_led_q_tail = 0;
-static bool s_led_active = false;
-static bool s_led_on = false;
-static uint8_t s_led_remaining = 0;
-static uint16_t s_led_on_ms = 0;
-static uint16_t s_led_off_ms = 0;
-static uint32_t s_led_next_ms = 0;
-static uint32_t s_led_last_heartbeat_ms = 0;
-
-static inline bool led_enabled(void) {
-    return GATEWAY_LED_PIN >= 0;
-}
-
-static inline void led_hw_set(bool on) {
-    if (!led_enabled()) return;
-    digitalWrite(GATEWAY_LED_PIN, on ? HIGH : LOW);
-}
-
-static bool led_enqueue(uint8_t blinks, uint16_t on_ms, uint16_t off_ms) {
-    if (!led_enabled() || blinks == 0) return false;
-    uint8_t next = (uint8_t)((s_led_q_head + 1) % LED_QUEUE_LEN);
-    if (next == s_led_q_tail) return false;  // queue full
-    s_led_q[s_led_q_head] = { blinks, on_ms, off_ms };
-    s_led_q_head = next;
-    return true;
-}
-
-static bool led_dequeue(led_pattern_t &out) {
-    if (s_led_q_head == s_led_q_tail) return false;
-    out = s_led_q[s_led_q_tail];
-    s_led_q_tail = (uint8_t)((s_led_q_tail + 1) % LED_QUEUE_LEN);
-    return true;
-}
-
-static void led_start_next(uint32_t now_ms) {
-    if (s_led_active) return;
-    led_pattern_t p;
-    if (!led_dequeue(p)) return;
-    s_led_active = true;
-    s_led_remaining = p.blinks;
-    s_led_on_ms = p.on_ms;
-    s_led_off_ms = p.off_ms;
-    s_led_on = true;
-    led_hw_set(true);
-    s_led_next_ms = now_ms + s_led_on_ms;
-}
-
-static void led_tick(void) {
-    if (!led_enabled()) return;
-
-    uint32_t now = millis();
-    led_start_next(now);
-    if (!s_led_active) return;
-
-    if ((int32_t)(now - s_led_next_ms) < 0) return;
-
-    if (s_led_on) {
-        s_led_on = false;
-        led_hw_set(false);
-        s_led_next_ms = now + s_led_off_ms;
-        return;
-    }
-
-    if (s_led_remaining > 0) s_led_remaining--;
-    if (s_led_remaining == 0) {
-        s_led_active = false;
-        return;
-    }
-
-    s_led_on = true;
-    led_hw_set(true);
-    s_led_next_ms = now + s_led_on_ms;
-}
-
-static inline void led_evt_rx_espnow(void) {
-    // 2 quick blinks: received ESP-NOW packet
-    led_enqueue(2, 55, 70);
-}
-
-static inline void led_evt_tx_server(void) {
-    // 3 quick blinks: JSON sent to bridge/server
-    led_enqueue(3, 40, 55);
-}
-
-static inline void led_evt_boot_sos_short(void) {
-    // Startup marker: 3 quick ("SOS curto")
-    led_enqueue(3, 70, 80);
-}
-
-static void led_heartbeat_tick(void) {
-    if (!led_enabled()) return;
-    uint32_t now = millis();
-    if (s_led_last_heartbeat_ms == 0 || (now - s_led_last_heartbeat_ms) >= 30000UL) {
-        // 1 quick blink every 30s
-        led_enqueue(1, 35, 0);
-        s_led_last_heartbeat_ms = now;
-    }
-}
-
 // ── Timestamp ─────────────────────────────────────────────────────────────────
 // No WiFi/NTP on gateway. bridge.py sends {"cmd":"SETTIME","ts":...} at startup.
 static int64_t s_time_offset_s = 0;
-static char s_gateway_mac_str[20] = "00:00:00:00:00:00";
-static uint32_t s_json_tx_count = 0;
-static uint32_t s_rx_packet_count = 0;
-static volatile uint32_t s_pkt_drop_count = 0;
-static uint32_t s_pkt_drop_logged = 0;
-static uint32_t s_last_pkt_drop_log_ms = 0;
-static uint32_t s_cmd_rx_count = 0;
-static uint32_t s_cmd_ok_count = 0;
-static uint32_t s_cmd_fail_count = 0;
-static uint32_t s_bad_json_count = 0;
-static uint32_t s_unhandled_pkt_count = 0;
-static uint32_t s_status_last_ms = 0;
-
-static constexpr uint32_t GATEWAY_STATUS_INTERVAL_MS = 60000UL;
-
-static inline void counter_inc(volatile uint32_t *value) {
-    __atomic_add_fetch(value, 1U, __ATOMIC_RELAXED);
-}
-
-static inline uint32_t counter_load(const volatile uint32_t *value) {
-    return __atomic_load_n(value, __ATOMIC_RELAXED);
-}
-
-static void read_wifi_sta_mac(uint8_t mac[6]) {
-    if (esp_read_mac(mac, ESP_MAC_WIFI_STA) != ESP_OK) {
-        memset(mac, 0, 6);
-    }
-}
-
-static void format_mac(const uint8_t mac[6], char *out, size_t out_len) {
-    snprintf(out, out_len, "%02X:%02X:%02X:%02X:%02X:%02X",
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-}
 
 static uint32_t unix_now(void) {
     return (uint32_t)(s_time_offset_s + esp_timer_get_time() / 1000000LL);
@@ -214,55 +61,7 @@ static const uint8_t *find_mac(uint16_t node_id) {
 static void json_out(JsonDocument &doc) {
     serializeJson(doc, Serial);
     Serial.println();
-    s_json_tx_count++;
-    led_evt_tx_server();
-}
-
-static void output_cmd_ack(const char *cmd, bool ok, const char *reason = nullptr,
-                           uint16_t node_id = 0, esp_err_t err = ESP_OK) {
-    JsonDocument doc;
-    doc["v"]    = 3;
-    doc["type"] = "CMD_ACK";
-    doc["cmd"]  = cmd ? cmd : "";
-    doc["ok"]   = ok;
-    if (node_id != 0) {
-        char nid[8];
-        snprintf(nid, sizeof(nid), "0x%04X", node_id);
-        doc["node_id"] = nid;
-    }
-    if (reason && reason[0] != '\0') doc["reason"] = reason;
-    if (err != ESP_OK) doc["err"] = esp_err_to_name(err);
-    doc["ts"] = unix_now();
-    json_out(doc);
-}
-
-static void output_gateway_status(void) {
-    gw_espnow_stats_t radio = gw_espnow_get_stats();
-    uint32_t pkt_drop_count = counter_load(&s_pkt_drop_count);
-    JsonDocument doc;
-    doc["v"]             = 3;
-    doc["type"]          = "GATEWAY_STATUS";
-    doc["fw"]            = FW_VERSION;
-    doc["mac"]           = s_gateway_mac_str;
-    doc["transport"]     = "usb";
-    doc["proto"]         = PROTO_VERSION;
-    doc["channel"]       = ESPNOW_CHANNEL;
-    doc["uptime_s"]      = millis() / 1000UL;
-    doc["free_heap"]     = ESP.getFreeHeap();
-    doc["rx_packets"]    = s_rx_packet_count;
-    doc["queue_drops"]   = pkt_drop_count;
-    doc["json_tx"]       = s_json_tx_count;
-    doc["cmd_rx"]        = s_cmd_rx_count;
-    doc["cmd_ok"]        = s_cmd_ok_count;
-    doc["cmd_fail"]      = s_cmd_fail_count;
-    doc["bad_json"]      = s_bad_json_count;
-    doc["crc_failures"]  = radio.rx_crc_failures;
-    doc["radio_tx_ok"]   = radio.tx_send_ok;
-    doc["radio_tx_fail"] = radio.tx_send_fail;
-    doc["queue_depth"]   = s_pkt_queue ? uxQueueMessagesWaiting(s_pkt_queue) : 0;
-    doc["unhandled_pkt"] = s_unhandled_pkt_count;
-    doc["ts"]            = unix_now();
-    json_out(doc);
+    Serial.flush();
 }
 
 static void output_sensor(const espnow_packet_t *pkt) {
@@ -320,9 +119,7 @@ static void on_recv(const espnow_packet_t *pkt, const uint8_t *src_mac) {
     pkt_event_t evt;
     evt.pkt = *pkt;
     memcpy(evt.src_mac, src_mac, 6);
-    if (xQueueSend(s_pkt_queue, &evt, 0) != pdTRUE) {
-        counter_inc(&s_pkt_drop_count);
-    }
+    xQueueSend(s_pkt_queue, &evt, 0);  // non-blocking; drop if full
 }
 
 // ── Command → ESP-NOW ─────────────────────────────────────────────────────────
@@ -331,18 +128,17 @@ static void on_recv(const espnow_packet_t *pkt, const uint8_t *src_mac) {
 // node_id in the packet) will process the command.
 static const uint8_t BCAST_MAC[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 
-static esp_err_t cmd_restart(uint16_t node_id) {
+static void cmd_restart(uint16_t node_id) {
     espnow_packet_t pkt = {};
     pkt.version = PROTO_VERSION;
     pkt.type    = PKT_CMD_RESTART;
     pkt.node_id = node_id;
     pkt.ttl     = DEFAULT_TTL;
-    esp_err_t err = gw_espnow_send(&pkt, BCAST_MAC);
-    ESP_LOGI(TAG, "CMD_RESTART → 0x%04X err=%s", node_id, esp_err_to_name(err));
-    return err;
+    gw_espnow_send(&pkt, BCAST_MAC);
+    ESP_LOGI(TAG, "CMD_RESTART → 0x%04X", node_id);
 }
 
-static esp_err_t cmd_config(uint16_t node_id, const JsonDocument &doc) {
+static void cmd_config(uint16_t node_id, const JsonDocument &doc) {
 
     espnow_packet_t pkt = {};
     pkt.version   = PROTO_VERSION;
@@ -381,7 +177,6 @@ static esp_err_t cmd_config(uint16_t node_id, const JsonDocument &doc) {
     ESP_LOGI(TAG, "CMD_CONFIG → 0x%04X  vbat_pin=%d vbat_enabled=%d vbat_div=%d num_sensors=%d has_ns=%d err=%d",
              node_id, pkt.sensor_id, pkt.reserved, cfg_vbat_div,
              cfg_num_sensors, has_num_sensors ? 1 : 0, (int)err);
-    return err;
 }
 
 // ── Serial command parser ─────────────────────────────────────────────────────
@@ -392,22 +187,17 @@ static size_t s_buf_len = 0;
 static void process_cmd(const char *str) {
     JsonDocument doc;
     if (deserializeJson(doc, str) != DeserializationError::Ok) {
-        s_bad_json_count++;
         ESP_LOGW(TAG, "Bad JSON: %.80s", str);
-        output_cmd_ack("INVALID_JSON", false, "parse_error");
         return;
     }
 
     const char *cmd = doc["cmd"];
     if (!cmd) return;
-    s_cmd_rx_count++;
 
     if (strcmp(cmd, "SETTIME") == 0) {
         int64_t ts = doc["ts"].as<int64_t>();
         s_time_offset_s = ts - (esp_timer_get_time() / 1000000LL);
         ESP_LOGI(TAG, "Time set, unix_now=%u", unix_now());
-        s_cmd_ok_count++;
-        output_cmd_ack("SETTIME", true);
         return;
     }
 
@@ -417,36 +207,9 @@ static void process_cmd(const char *str) {
     else
         node_id = doc["node_id"].as<uint16_t>();
 
-    if (node_id == 0) {
-        s_cmd_fail_count++;
-        ESP_LOGW(TAG, "Invalid node_id for cmd=%s", cmd);
-        output_cmd_ack(cmd, false, "invalid_node_id");
-        return;
-    }
-
-    if (strcmp(cmd, "RESTART") == 0) {
-        esp_err_t err = cmd_restart(node_id);
-        if (err == ESP_OK) {
-            s_cmd_ok_count++;
-            output_cmd_ack("RESTART", true, nullptr, node_id);
-        } else {
-            s_cmd_fail_count++;
-            output_cmd_ack("RESTART", false, "espnow_send_failed", node_id, err);
-        }
-    } else if (strcmp(cmd, "CONFIG")  == 0) {
-        esp_err_t err = cmd_config(node_id, doc);
-        if (err == ESP_OK) {
-            s_cmd_ok_count++;
-            output_cmd_ack("CONFIG", true, nullptr, node_id);
-        } else {
-            s_cmd_fail_count++;
-            output_cmd_ack("CONFIG", false, "espnow_send_failed", node_id, err);
-        }
-    } else {
-        s_cmd_fail_count++;
-        ESP_LOGW(TAG, "Unknown cmd: %s", cmd);
-        output_cmd_ack(cmd, false, "unknown_cmd", node_id);
-    }
+    if      (strcmp(cmd, "RESTART") == 0) cmd_restart(node_id);
+    else if (strcmp(cmd, "CONFIG")  == 0) cmd_config(node_id, doc);
+    else ESP_LOGW(TAG, "Unknown cmd: %s", cmd);
 }
 
 static void serial_tick(void) {
@@ -472,69 +235,42 @@ void setup(void) {
     Serial.setRxBufferSize(1024);
     delay(300);
 
-    if (led_enabled()) {
-        pinMode(GATEWAY_LED_PIN, OUTPUT);
-        led_hw_set(false);
-        ESP_LOGI(TAG, "LED enabled on pin %d", GATEWAY_LED_PIN);
-    } else {
-        ESP_LOGW(TAG, "No built-in LED pin defined for this target");
-    }
-
     s_pkt_queue = xQueueCreate(PKT_QUEUE_LEN, sizeof(pkt_event_t));
     gw_espnow_init(ESPNOW_CHANNEL, on_recv);
 
     uint8_t mac[6];
-    read_wifi_sta_mac(mac);
-
-    format_mac(mac, s_gateway_mac_str, sizeof(s_gateway_mac_str));
+    // esp_wifi_get_mac is reliable right after WiFi.mode(WIFI_STA) in gw_espnow_init
+    if (esp_wifi_get_mac(WIFI_IF_STA, mac) != ESP_OK) {
+        WiFi.macAddress(mac);  // fallback
+    }
 
     JsonDocument doc;
+    char mac_str[20];
+    snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     doc["v"]    = 3;
     doc["type"] = "GATEWAY_READY";
     doc["fw"]   = FW_VERSION;
-    doc["mac"]  = s_gateway_mac_str;
+    doc["mac"]  = mac_str;
     doc["ts"]   = 0;
     json_out(doc);
-
-    led_evt_boot_sos_short();
 }
 
 void loop(void) {
     // Drain packet queue (filled by ESP-NOW WiFi-task callback).
     pkt_event_t evt;
     while (xQueueReceive(s_pkt_queue, &evt, 0) == pdTRUE) {
-        s_rx_packet_count++;
-        led_evt_rx_espnow();
         cache_mac(evt.pkt.node_id, evt.src_mac);
         switch (evt.pkt.type) {
             case PKT_SENSOR:    output_sensor(&evt.pkt);    break;
             case PKT_HEARTBEAT: output_heartbeat(&evt.pkt); break;
             case PKT_HELLO:     output_hello(&evt.pkt);     break;
             default:
-                s_unhandled_pkt_count++;
                 ESP_LOGW(TAG, "Unhandled type=0x%02X from 0x%04X",
                          evt.pkt.type, evt.pkt.node_id);
                 break;
         }
     }
-
-    uint32_t now = millis();
-    uint32_t pkt_drop_count = counter_load(&s_pkt_drop_count);
-    if (pkt_drop_count != s_pkt_drop_logged && (now - s_last_pkt_drop_log_ms) >= 5000UL) {
-        ESP_LOGW(TAG, "Packet queue overflow: dropped=%lu queue_depth=%u",
-                 (unsigned long)pkt_drop_count,
-                 s_pkt_queue ? (unsigned)uxQueueMessagesWaiting(s_pkt_queue) : 0U);
-        s_pkt_drop_logged = pkt_drop_count;
-        s_last_pkt_drop_log_ms = now;
-    }
-
-    if (s_status_last_ms == 0 || (now - s_status_last_ms) >= GATEWAY_STATUS_INTERVAL_MS) {
-        output_gateway_status();
-        s_status_last_ms = now;
-    }
-
     serial_tick();
-    led_heartbeat_tick();
-    led_tick();
     delay(5);
 }

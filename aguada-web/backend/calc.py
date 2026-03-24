@@ -14,13 +14,19 @@ def calc_level(
 ) -> dict:
     """Calcula level_cm, pct e volume_l a partir da distância medida."""
     if distance_cm is None:
-        return {"level_cm": None, "pct": None, "volume_l": None}
+        return {"level_cm": None, "pct": None, "volume_l": None, "out_of_range": False}
 
     level = level_max_cm - (distance_cm - sensor_offset_cm)
+    out_of_range = level < 0.0 or level > level_max_cm
     level = max(0.0, min(float(level_max_cm), level))
     pct = level / level_max_cm * 100.0
     volume = pct / 100.0 * volume_max_l
-    return {"level_cm": round(level, 1), "pct": round(pct, 2), "volume_l": round(volume, 1)}
+    return {
+        "level_cm": round(level, 1),
+        "pct": round(pct, 2),
+        "volume_l": round(volume, 1),
+        "out_of_range": out_of_range,
+    }
 
 
 def calc_consumption_events(readings: list[dict], date: str) -> list[dict]:

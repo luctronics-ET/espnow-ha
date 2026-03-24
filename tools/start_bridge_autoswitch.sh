@@ -23,6 +23,20 @@ BROKER_LOG="/tmp/local_mqtt.log"
 SWITCH_LOG="/tmp/bridge_autoswitch.log"
 
 detect_gateway_port() {
+  # 0) Prefer stable by-id symlink for known CH340 gateway adapter
+  local byid_known="/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7B067329-if00"
+  if [[ -e "$byid_known" ]]; then
+    echo "$byid_known"
+    return 0
+  fi
+
+  # 0.1) Fallback: first stable by-id serial symlink
+  for p in /dev/serial/by-id/*; do
+    [[ -e "$p" ]] || continue
+    echo "$p"
+    return 0
+  done
+
   # 1) First, try matching by known USB serial short-id (most reliable)
   if [[ -n "$GATEWAY_USB_SERIAL_SHORT" ]]; then
     for p in /dev/ttyACM* /dev/ttyUSB*; do

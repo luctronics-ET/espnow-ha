@@ -47,9 +47,8 @@ def _process_message(raw: dict) -> Optional[dict]:
         rssi = raw.get("rssi")
         vbat_raw = raw.get("vbat")
         seq = raw.get("seq", 0)
-        # ts < 1e9 significa gateway não sincronizado (uptime em segundos), usa tempo do servidor
-        _ts = raw.get("ts") or 0
-        ts = _ts if _ts > 1_000_000_000 else int(time.time())
+        # Timestamp sempre pelo servidor — gateway e nós não têm RTC confiável.
+        ts = int(time.time())
         vbat = vbat_raw / 10.0 if vbat_raw is not None else None
 
         # Descarta leituras com erro de sensor
@@ -79,6 +78,7 @@ def _process_message(raw: dict) -> Optional[dict]:
             "level_cm": calc["level_cm"],
             "volume_l": calc["volume_l"],
             "pct": calc["pct"],
+            "out_of_range": calc["out_of_range"],
             "rssi": rssi,
             "vbat": vbat,
             "seq": seq,
@@ -148,15 +148,24 @@ class Bridge:
         logger.info("Bridge iniciado (porta=%s)", serial_port)
 
     def _run(self, serial_port: str) -> None:
-        try:
-            import serial
-            ser = serial.Serial(serial_port, 115200, timeout=2)
-            logger.info("Serial aberto: %s", serial_port)
-            self._send_settime(ser)
-            self._read_loop(ser)
-        except Exception as e:
-            logger.warning("Serial indisponível (%s) — modo simulação", e)
-            self._sim_loop()
+        allow_sim = os.getenv("BRIDGE_ALLOW_SIMULATION", "0").strip().lower() in {"1", "true", "yes", "on"}
+        while True:
+            try:
+                import serial
+                ser = serial.Serial(serial_port, 115200, timeout=2)
+                logger.info("Serial aberto: %s", serial_port)
+                self._send_settime(ser)
+                self._read_loop(ser)
+            except Exception as e:
+                if allow_sim:
+                    logger.warning("Serial indisponível (%s) — modo simulação habilitado por BRIDGE_ALLOW_SIMULATION", e)
+                    self._sim_loop()
+                    return
+                logger.error(
+                    "Serial indisponível (%s). Aguardando sensor real (simulação desativada). Nova tentativa em 5s.",
+                    e,
+                )
+                time.sleep(5)
 
     def _send_settime(self, ser) -> None:
         """Sincroniza o timestamp do gateway com o servidor."""
@@ -171,9 +180,11 @@ class Bridge:
                 line = ser.readline().decode("utf-8", errors="replace").strip()
                 if not line:
                     continue
+                logger.debug("Serial RX: %r", line)
                 try:
                     raw = json.loads(line)
                 except json.JSONDecodeError:
+                    logger.warning("JSON inválido do gateway: %r", line[:120])
                     continue
                 # Reenvia SETTIME quando gateway reinicia
                 if raw.get("type") == "GATEWAY_READY":
@@ -181,6 +192,21 @@ class Bridge:
                     self._send_settime(ser)
                 self._handle(raw)
             except Exception as e:
+                msg = str(e).lower()
+                serial_drop_markers = (
+                    "device reports readiness to read but returned no data",
+                    "input/output error",
+                    "device disconnected",
+                    "port is closed",
+                    "bad file descriptor",
+                )
+                if any(m in msg for m in serial_drop_markers):
+                    logger.error("Serial desconectada durante leitura (%s). Reconectando...", e)
+                    try:
+                        ser.close()
+                    except Exception:
+                        pass
+                    raise
                 logger.error("Erro no read_loop: %s", e)
                 time.sleep(1)
 
@@ -218,16 +244,39 @@ class Bridge:
             time.sleep(30)
 
     def _handle(self, raw: dict) -> None:
+        msg_type = raw.get("type", "?")
+        if msg_type == "SENSOR":
+            logger.info(
+                "SENSOR recebido: node=%s sensor=%s dist=%s rssi=%s ts=%s",
+                raw.get("node_id"), raw.get("sensor_id"),
+                raw.get("distance_cm"), raw.get("rssi"), raw.get("ts"),
+            )
+        elif msg_type not in ("GATEWAY_READY", "GATEWAY_STATUS", "CMD_ACK"):
+            logger.debug("Mensagem tipo=%s: %s", msg_type, raw)
         record = _process_message(raw)
         if record is None:
+            if msg_type == "SENSOR":
+                logger.warning(
+                    "SENSOR descartado por _process_message: node=%s sensor=%s flags=%s",
+                    raw.get("node_id"), raw.get("sensor_id"), raw.get("flags"),
+                )
             return
         asyncio.run_coroutine_threadsafe(self._save_and_notify(record), self._loop)
 
     async def _save_and_notify(self, record: dict) -> None:
         import aiosqlite
-        async with aiosqlite.connect(self.db_path) as conn:
-            conn.row_factory = aiosqlite.Row
-            await insert_reading(conn, record)
-            await upsert_state(conn, record)
+        try:
+            async with aiosqlite.connect(self.db_path) as conn:
+                conn.row_factory = aiosqlite.Row
+                await insert_reading(conn, record)
+                await upsert_state(conn, record)
+            logger.info(
+                "Gravado: alias=%s dist=%.1f level=%.1f ts=%d",
+                record["alias"], record.get("distance_cm") or 0,
+                record.get("level_cm") or 0, record["ts"],
+            )
+        except Exception as e:
+            logger.error("Erro ao gravar no DB: %s — registro: %s", e, record)
+            return
         self.notify_cb(record)
         self._publish_mqtt(record)

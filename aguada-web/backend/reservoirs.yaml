@@ -33,13 +33,13 @@ reservoirs:
     - sensor_id: 1
       alias: CIE1
       name: Cisterna IE-1
-      level_max_cm: 200
+      level_max_cm: 240
       volume_max_l: 245000
       sensor_offset_cm: 10
     - sensor_id: 2
       alias: CIE2
       name: Cisterna IE-2
-      level_max_cm: 200
+      level_max_cm: 240
       volume_max_l: 245000
       sensor_offset_cm: 10
 

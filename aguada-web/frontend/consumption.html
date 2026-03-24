@@ -4,8 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Aguada — Consumo</title>
-  <script>tailwind.config = { darkMode: 'class' }</script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/tailwind.css?v=1" />
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
   <style>[x-cloak]{display:none}</style>
 </head>
@@ -26,6 +25,7 @@
           <a href="abastecimento.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Abastecimento</a>
           <a href="dados.html"       class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Dados</a>
           <a href="report.html"      class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Relatório</a>
+           <a href="documentacao.html" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Documentação</a>
         </nav>
         <button @click="toggleDark()" class="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">
           <svg x-show="!darkMode" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
@@ -179,6 +179,7 @@
 
   function consumptionApp() {
     const today = new Date().toISOString().slice(0,10);
+    const chartStore = {};
     return {
       darkMode: localStorage.getItem('darkMode') === 'true',
       alias: 'CON',
@@ -186,11 +187,14 @@
       period: 'Hoje',
       events: [],
       loading: false,
-      charts: {},
       kpi: { consumed: null, supplied: null, balance: null, peak: null, peakHour: null },
 
       init() { this.load(); },
-      toggleDark() { this.darkMode = !this.darkMode; localStorage.setItem('darkMode', this.darkMode); },
+      toggleDark() {
+        this.darkMode = !this.darkMode;
+        localStorage.setItem('darkMode', this.darkMode);
+        this.$nextTick(() => this.load());
+      },
 
       setPeriod(p) { this.period = p; this.load(); },
 
@@ -403,9 +407,24 @@
       makeChart(id, config) {
         if (typeof Chart === 'undefined') return;
         const canvas = document.getElementById(id);
-        if (!canvas) return;
-        if (this.charts[id]) { this.charts[id].destroy(); }
-        this.charts[id] = new Chart(canvas.getContext('2d'), config);
+        const ctx = canvas?.getContext?.('2d');
+        if (!ctx) return;
+        const safeConfig = {
+          ...config,
+          options: {
+            animation: false,
+            ...(config.options || {})
+          }
+        };
+        if (chartStore[id]) {
+          try {
+            chartStore[id].stop();
+            chartStore[id].destroy();
+          } catch (e) {
+            console.warn(`Falha ao recriar gráfico ${id}:`, e);
+          }
+        }
+        chartStore[id] = new Chart(ctx, safeConfig);
       },
 
       formatHour(h) {

@@ -2,14 +2,7 @@
 #include "../../shared/protocol.h"
 #include <esp_err.h>
 
-typedef struct {
-	uint32_t rx_crc_failures;
-	uint32_t tx_send_ok;
-	uint32_t tx_send_fail;
-} gw_espnow_stats_t;
-
 typedef void (*gw_recv_cb_t)(const espnow_packet_t *pkt, const uint8_t *src_mac);
 
 esp_err_t gw_espnow_init(uint8_t channel, gw_recv_cb_t recv_cb);
 esp_err_t gw_espnow_send(const espnow_packet_t *pkt, const uint8_t *dest_mac);
-gw_espnow_stats_t gw_espnow_get_stats(void);

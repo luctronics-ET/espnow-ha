@@ -1,0 +1,4 @@
+[ 1825031ms] [ERROR] WebSocket connection to 'ws://localhost:8090/ws' failed: Error during WebSocket handshake: Unexpected response code: 502 @ http://localhost:8090/index.html:374
+[ 1825981ms] [ERROR] WebSocket connection to 'ws://localhost:8090/ws' failed: Error during WebSocket handshake: Unexpected response code: 502 @ http://localhost:8090/index.html:374
+[ 1829042ms] [ERROR] WebSocket connection to 'ws://localhost:8090/ws' failed: Error during WebSocket handshake: Unexpected response code: 502 @ http://localhost:8090/index.html:374
+[ 1833990ms] [ERROR] WebSocket connection to 'ws://localhost:8090/ws' failed: Error during WebSocket handshake: Unexpected response code: 502 @ http://localhost:8090/index.html:374
