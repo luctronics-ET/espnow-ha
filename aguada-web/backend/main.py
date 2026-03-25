@@ -14,6 +14,20 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Quer
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+try:
+    from dotenv import dotenv_values
+except ImportError:  # pragma: no cover - optional dependency via uvicorn[standard]
+    dotenv_values = None
+
+if dotenv_values is not None:
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if env_path.exists():
+        env_values = dotenv_values(env_path)
+        for key in ("SERIAL_PORT", "MQTT_HOST", "MQTT_PORT", "MQTT_USER", "MQTT_PASS", "TZ"):
+            value = env_values.get(key)
+            if value and key not in os.environ:
+                os.environ[key] = value
+
 from .bridge import Bridge, RESERVOIR_INDEX
 from .db import (
     init_db,
@@ -37,7 +51,9 @@ from .report import generate_daily_report_pdf
 logger = logging.getLogger("main")
 logging.basicConfig(level=logging.INFO)
 
-DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = Path(os.getenv("DATA_DIR", str(DEFAULT_DATA_DIR)))
 DB_PATH = str(DATA_DIR / "aguada.db")
 REPORTS_DIR = DATA_DIR / "reports"
 
@@ -91,9 +107,20 @@ scheduler: Optional[AsyncIOScheduler] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global bridge, scheduler
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    global bridge, scheduler, DATA_DIR, DB_PATH, REPORTS_DIR
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        if DATA_DIR != DEFAULT_DATA_DIR:
+            logger.warning("DATA_DIR=%s sem permissão no host; usando fallback %s", DATA_DIR, DEFAULT_DATA_DIR)
+            DATA_DIR = DEFAULT_DATA_DIR
+            DB_PATH = str(DATA_DIR / "aguada.db")
+            REPORTS_DIR = DATA_DIR / "reports"
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+        else:
+            raise
 
     async with aiosqlite.connect(DB_PATH) as conn:
         await init_db(conn)
@@ -404,6 +431,20 @@ async def get_manual_reservoirs(limit: int = Query(200, ge=1, le=1000)):
         conn.row_factory = aiosqlite.Row
         rows = await get_manual_reservoir_logs(conn, limit=limit)
     return {"items": rows}
+
+
+@app.post("/api/nodes/{node_id}/cmd")
+async def post_node_cmd(node_id: str, body: dict):
+    """Envia um comando JSON ao nó via gateway serial (ex: RESTART, CMD_CONFIG)."""
+    if bridge is None:
+        raise HTTPException(503, "Bridge não inicializada")
+    allowed = {"RESTART", "CMD_CONFIG"}
+    cmd = body.get("cmd", "").upper()
+    if cmd not in allowed:
+        raise HTTPException(400, f"Comando '{cmd}' não permitido. Use: {allowed}")
+    payload = {**body, "cmd": cmd, "node_id": node_id}
+    bridge.send_cmd(payload)
+    return {"ok": True, "queued": payload}
 
 
 @app.websocket("/ws")

@@ -7,9 +7,11 @@ import asyncio
 import json
 import logging
 import os
+import queue
 import random
 import threading
 import time
+from glob import glob
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -32,6 +34,26 @@ for _node_id, _sensors in _raw.items():
 
 
 FLAG_SENSOR_ERROR = 1 << 2
+
+
+def _detect_serial_port(configured_port: Optional[str]) -> str:
+    candidates: list[str] = []
+    if configured_port:
+        candidates.append(configured_port)
+
+    candidates.extend(sorted(glob("/dev/serial/by-id/*")))
+    candidates.extend(sorted(glob("/dev/ttyACM*")))
+    candidates.extend(sorted(glob("/dev/ttyUSB*")))
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        if Path(candidate).exists():
+            return candidate
+
+    return configured_port or "/dev/ttyUSB0"
 
 
 def _process_message(raw: dict) -> Optional[dict]:
@@ -98,6 +120,7 @@ class Bridge:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
         self._mqtt_client = None
+        self._cmd_queue: queue.Queue = queue.Queue()
         self._init_mqtt()
 
     def _init_mqtt(self) -> None:
@@ -140,7 +163,7 @@ class Bridge:
 
     def start(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
-        serial_port = os.getenv("SERIAL_PORT", "/dev/ttyUSB0")
+        serial_port = _detect_serial_port(os.getenv("SERIAL_PORT"))
         self._thread = threading.Thread(
             target=self._run, args=(serial_port,), daemon=True, name="bridge"
         )
@@ -152,8 +175,27 @@ class Bridge:
         while True:
             try:
                 import serial
-                ser = serial.Serial(serial_port, 115200, timeout=2)
+                resolved_port = _detect_serial_port(serial_port)
+                if resolved_port != serial_port:
+                    logger.warning("SERIAL_PORT ajustada automaticamente: %s -> %s", serial_port, resolved_port)
+                    serial_port = resolved_port
+                ser = serial.Serial(serial_port, 115200, timeout=1, dsrdtr=False, rtscts=False)
                 logger.info("Serial aberto: %s", serial_port)
+                try:
+                    ser.reset_input_buffer()
+                    ser.reset_output_buffer()
+                except Exception as e:
+                    logger.debug("Reset de buffers serial ignorado: %s", e)
+
+                try:
+                    ser.setDTR(False)
+                    time.sleep(0.15)
+                    ser.setDTR(True)
+                    logger.debug("Pulso DTR aplicado para resetar o gateway")
+                except Exception as e:
+                    logger.debug("Pulso DTR ignorado: %s", e)
+
+                self._drain_startup_serial(ser, 3.0)
                 self._send_settime(ser)
                 self._read_loop(ser)
             except Exception as e:
@@ -167,6 +209,21 @@ class Bridge:
                 )
                 time.sleep(5)
 
+    def send_cmd(self, cmd_dict: dict) -> None:
+        """Enfileira um comando JSON para envio ao gateway via serial."""
+        self._cmd_queue.put(cmd_dict)
+
+    def _flush_cmd_queue(self, ser) -> None:
+        """Envia todos os comandos pendentes na fila para o serial."""
+        try:
+            while True:
+                cmd_dict = self._cmd_queue.get_nowait()
+                raw = json.dumps(cmd_dict) + "\n"
+                ser.write(raw.encode())
+                logger.info("CMD enviado ao gateway: %s", raw.strip())
+        except queue.Empty:
+            pass
+
     def _send_settime(self, ser) -> None:
         """Sincroniza o timestamp do gateway com o servidor."""
         ts = int(time.time())
@@ -174,17 +231,60 @@ class Bridge:
         ser.write(cmd.encode())
         logger.info("SETTIME enviado ao gateway: ts=%d", ts)
 
+    def _normalize_serial_line(self, raw_line: str) -> str:
+        line = raw_line.strip()
+        if not line:
+            return ""
+        if line.startswith("{"):
+            return line
+        json_start = line.find("{")
+        if json_start >= 0:
+            return line[json_start:].strip()
+        return line
+
+    def _read_serial_line(self, ser) -> str:
+        raw = ser.readline().decode("utf-8", errors="replace")
+        return self._normalize_serial_line(raw)
+
+    def _handle_non_json_serial_line(self, line: str) -> None:
+        lowered = line.lower()
+        if "waiting for download" in lowered or "download_boot" in lowered:
+            logger.error("Gateway entrou em modo bootloader UART: %s", line[:160])
+            return
+        if line.startswith("ets ") or line.startswith("rst:") or "boot:" in lowered:
+            logger.info("Boot do gateway: %s", line[:160])
+            return
+        logger.debug("Linha serial não-JSON: %r", line[:160])
+
+    def _drain_startup_serial(self, ser, duration_s: float) -> None:
+        deadline = time.time() + duration_s
+        logger.info("Aguardando %.1fs para boot do gateway...", duration_s)
+        while time.time() < deadline:
+            line = self._read_serial_line(ser)
+            if not line:
+                continue
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError:
+                self._handle_non_json_serial_line(line)
+                continue
+
+            if raw.get("type") == "GATEWAY_READY":
+                logger.info("GATEWAY_READY recebido durante startup")
+            self._handle(raw)
+
     def _read_loop(self, ser) -> None:
         while True:
             try:
-                line = ser.readline().decode("utf-8", errors="replace").strip()
+                self._flush_cmd_queue(ser)
+                line = self._read_serial_line(ser)
                 if not line:
                     continue
                 logger.debug("Serial RX: %r", line)
                 try:
                     raw = json.loads(line)
                 except json.JSONDecodeError:
-                    logger.warning("JSON inválido do gateway: %r", line[:120])
+                    self._handle_non_json_serial_line(line)
                     continue
                 # Reenvia SETTIME quando gateway reinicia
                 if raw.get("type") == "GATEWAY_READY":
