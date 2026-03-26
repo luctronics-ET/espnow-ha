@@ -119,8 +119,11 @@ static bool relay_button_pressed_now(void) {
 static void led_set(bool on) {
     if (!g_cfg.led_enabled) return;
     if (relay_led_conflict()) return;
-    // GPIO8 is active-low on ESP32-C3 SuperMini
+#if DEFAULT_LED_ACTIVE_LOW
     digitalWrite(DEFAULT_LED_PIN, on ? LOW : HIGH);
+#else
+    digitalWrite(DEFAULT_LED_PIN, on ? HIGH : LOW);
+#endif
 }
 
 static void led_blink(int count, int ms) {

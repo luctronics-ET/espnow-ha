@@ -42,11 +42,45 @@ typedef struct {
     char        fw_version[8];
 } node_config_t;
 
-// GPIO defaults for ESP32-C3 SuperMini
-#define DEFAULT_TRIG1   1
-#define DEFAULT_ECHO1   0
-#define DEFAULT_TRIG2   3
-#define DEFAULT_ECHO2   2
-#ifndef DEFAULT_LED_PIN
-#define DEFAULT_LED_PIN 8               // active-low on ESP32-C3 SuperMini
+// GPIO defaults — overridable via build flags
+#if defined(CONFIG_IDF_TARGET_ESP32C3)
+// ESP32-C3 SuperMini
+#  ifndef DEFAULT_TRIG1
+#    define DEFAULT_TRIG1   1
+#  endif
+#  ifndef DEFAULT_ECHO1
+#    define DEFAULT_ECHO1   0
+#  endif
+#  ifndef DEFAULT_TRIG2
+#    define DEFAULT_TRIG2   3
+#  endif
+#  ifndef DEFAULT_ECHO2
+#    define DEFAULT_ECHO2   2
+#  endif
+#  ifndef DEFAULT_LED_PIN
+#    define DEFAULT_LED_PIN 8           // active-low on ESP32-C3 SuperMini
+#  endif
+#  ifndef DEFAULT_LED_ACTIVE_LOW
+#    define DEFAULT_LED_ACTIVE_LOW 1
+#  endif
+#else
+// Classic ESP32 DevKit
+#  ifndef DEFAULT_TRIG1
+#    define DEFAULT_TRIG1   5
+#  endif
+#  ifndef DEFAULT_ECHO1
+#    define DEFAULT_ECHO1   18
+#  endif
+#  ifndef DEFAULT_TRIG2
+#    define DEFAULT_TRIG2   19
+#  endif
+#  ifndef DEFAULT_ECHO2
+#    define DEFAULT_ECHO2   21
+#  endif
+#  ifndef DEFAULT_LED_PIN
+#    define DEFAULT_LED_PIN 2           // active-high on ESP32 DevKit
+#  endif
+#  ifndef DEFAULT_LED_ACTIVE_LOW
+#    define DEFAULT_LED_ACTIVE_LOW 0
+#  endif
 #endif

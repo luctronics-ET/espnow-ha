@@ -44,6 +44,9 @@ from .db import (
     get_manual_pump_logs,
     get_manual_valve_logs,
     get_manual_reservoir_logs,
+    get_all_nodes,
+    get_node,
+    patch_node,
 )
 from .calc import calc_consumption_events, decimate_readings
 from .report import generate_daily_report_pdf
@@ -431,6 +434,47 @@ async def get_manual_reservoirs(limit: int = Query(200, ge=1, le=1000)):
         conn.row_factory = aiosqlite.Row
         rows = await get_manual_reservoir_logs(conn, limit=limit)
     return {"items": rows}
+
+
+@app.get("/api/gateway")
+async def get_gateway_status():
+    """Retorna status atual do gateway USB (porta serial, MAC, firmware, conectado)."""
+    if bridge is None:
+        return {"connected": False, "port": None, "mac": None, "fw": None, "sim_mode": False, "last_seen": None}
+    return bridge.get_status()
+
+
+@app.get("/api/nodes")
+async def get_nodes():
+    """Lista todos os nodes já vistos (HELLO), com estado online/offline."""
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        return await get_all_nodes(conn)
+
+
+@app.get("/api/nodes/{node_id}")
+async def get_node_detail(node_id: str):
+    """Retorna detalhes de um node pelo node_id (ex: 0x7758)."""
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        node = await get_node(conn, node_id.lower())
+    if node is None:
+        raise HTTPException(404, f"Node '{node_id}' não encontrado")
+    return node
+
+
+@app.patch("/api/nodes/{node_id}")
+async def patch_node_meta(node_id: str, body: dict):
+    """Atualiza alias, nome e nota de um node. Campos permitidos: alias, name, note."""
+    allowed = {"alias", "name", "note"}
+    if not any(k in body for k in allowed):
+        raise HTTPException(400, f"Nenhum campo editável. Use: {allowed}")
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        ok = await patch_node(conn, node_id.lower(), body)
+    if not ok:
+        raise HTTPException(404, f"Node '{node_id}' não encontrado")
+    return {"ok": True}
 
 
 @app.post("/api/nodes/{node_id}/cmd")

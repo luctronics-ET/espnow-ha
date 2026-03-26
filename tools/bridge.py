@@ -11,6 +11,7 @@ Usage:
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 import threading
@@ -589,6 +590,7 @@ class Bridge:
         self._gateway_online = False
         self._gateway_last_seen = 0.0
         self._gateway_timeout_s = args.gateway_timeout
+        self._serial_reconnect_delay_s = max(1.0, float(args.serial_reconnect_delay))
 
     def _publish_json(self, topic: str, payload: dict, retain: bool = False):
         self.client.publish(topic, json.dumps(payload), retain=retain)
@@ -675,6 +677,71 @@ class Bridge:
             if self._serial and self._serial.is_open:
                 self._serial.write((line + "\n").encode())
                 log.debug("→ serial: %s", line)
+
+    def _close_serial(self):
+        with self._serial_lock:
+            ser = self._serial
+            self._serial = None
+
+        if ser is None:
+            return
+
+        try:
+            if ser.is_open:
+                ser.close()
+        except Exception as e:
+            log.debug("Serial close skipped: %s", e)
+
+    def _open_serial(self) -> bool:
+        port_display = self.args.port
+        try:
+            real_port = os.path.realpath(self.args.port)
+            if real_port and real_port != self.args.port:
+                port_display = f"{self.args.port} -> {real_port}"
+        except Exception:
+            pass
+
+        log.info("Opening %s @ %d baud", port_display, self.args.baud)
+
+        try:
+            ser = serial.Serial(self.args.port, self.args.baud, timeout=1)
+        except serial.SerialException as e:
+            log.warning("Unable to open serial %s: %s", self.args.port, e)
+            self._mark_gateway_offline("serial unavailable")
+            return False
+
+        with self._serial_lock:
+            self._serial = ser
+
+        try:
+            ser.reset_input_buffer()
+            ser.reset_output_buffer()
+        except Exception as e:
+            log.debug("Serial buffer reset skipped: %s", e)
+
+        # Some USB-CDC boards do not auto-reset reliably on open.
+        # Force a short DTR pulse so the gateway always reboots and sends GATEWAY_READY.
+        try:
+            ser.setDTR(False)
+            time.sleep(0.15)
+            ser.setDTR(True)
+            log.debug("Serial DTR pulse applied")
+        except Exception as e:
+            log.debug("DTR pulse skipped: %s", e)
+
+        log.info("Waiting 3s for gateway boot...")
+        self._drain_startup_serial(ser, 3.0)
+        return True
+
+    def _reconnect_serial(self, reason: str):
+        self._mark_gateway_offline(reason)
+        self._close_serial()
+        log.warning(
+            "Reconnecting serial in %.1fs (%s)",
+            self._serial_reconnect_delay_s,
+            reason,
+        )
+        time.sleep(self._serial_reconnect_delay_s)
 
     def _publish_button_state_pulse(self, node_id: str):
         """Publish button pulse as ON then OFF shortly after, for HA binary_sensor."""
@@ -965,38 +1032,23 @@ class Bridge:
         self.client.connect(self.args.mqtt, self.args.mqtt_port, keepalive=60)
         self.client.loop_start()
 
-        # Open serial (opening ACM resets the ESP32-C3; wait for boot)
-        log.info("Opening %s @ %d baud", self.args.port, self.args.baud)
-        ser = serial.Serial(self.args.port, self.args.baud, timeout=1)
-        self._serial = ser
-        try:
-            ser.reset_input_buffer()
-            ser.reset_output_buffer()
-        except Exception as e:
-            log.debug("Serial buffer reset skipped: %s", e)
-        # Some USB-CDC boards do not auto-reset reliably on open.
-        # Force a short DTR pulse so the gateway always reboots and sends GATEWAY_READY.
-        try:
-            ser.setDTR(False)
-            time.sleep(0.15)
-            ser.setDTR(True)
-            log.debug("Serial DTR pulse applied")
-        except Exception as e:
-            log.debug("DTR pulse skipped: %s", e)
-        log.info("Waiting 3s for gateway boot...")
-        self._drain_startup_serial(ser, 3.0)
-
         log.info("Bridge running. Ctrl+C to stop.")
         last_timeout_check = time.time()
 
         try:
             while True:
+                if not self._serial or not self._serial.is_open:
+                    if not self._open_serial():
+                        time.sleep(self._serial_reconnect_delay_s)
+                        continue
+                    last_timeout_check = time.time()
+
+                ser = self._serial
                 try:
                     line = self._read_serial_line(ser)
                 except serial.SerialException as e:
                     log.error("Serial error: %s", e)
-                    self._mark_gateway_offline("serial error")
-                    time.sleep(2)
+                    self._reconnect_serial(f"serial error: {e}")
                     continue
 
                 if line:
@@ -1008,14 +1060,14 @@ class Bridge:
                 if now - last_timeout_check > 30:
                     self.tracker.check_timeouts()
                     if self._gateway_timeout_s > 0 and self._gateway_online and (now - self._gateway_last_seen > self._gateway_timeout_s):
-                        self._mark_gateway_offline(f"no serial data for {self._gateway_timeout_s}s")
+                        self._reconnect_serial(f"no serial data for {self._gateway_timeout_s}s")
                     last_timeout_check = now
 
         except KeyboardInterrupt:
             log.info("Stopping.")
         finally:
             self._mark_gateway_offline("bridge stopping")
-            ser.close()
+            self._close_serial()
             self.client.loop_stop()
             self.client.disconnect()
             if self._influx:
@@ -1036,6 +1088,8 @@ def main():
                         help="Seconds without data before node is marked offline")
     parser.add_argument("--gateway-timeout", default=0, type=int,
                         help="Seconds without serial JSON before gateway is marked offline (0=disable timeout)")
+    parser.add_argument("--serial-reconnect-delay", default=2.0, type=float,
+                        help="Seconds to wait before retrying the serial connection after errors/disconnects")
     parser.add_argument("--influx-url",    default="",            help="InfluxDB 2.x URL (ex: http://localhost:8086). Omita para desativar.")
     parser.add_argument("--influx-token",  default="",            help="InfluxDB API token")
     parser.add_argument("--influx-org",    default="aguada",      help="InfluxDB org")

@@ -74,6 +74,19 @@ CREATE TABLE IF NOT EXISTS manual_valve_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_manual_valve_ts ON manual_valve_logs(ts DESC);
 
+CREATE TABLE IF NOT EXISTS nodes (
+    node_id     TEXT    PRIMARY KEY,
+    alias       TEXT,
+    name        TEXT,
+    num_sensors INTEGER DEFAULT 0,
+    fw_version  TEXT,
+    last_seen   INTEGER,
+    last_rssi   INTEGER,
+    last_vbat   REAL,
+    flags       INTEGER DEFAULT 0,
+    note        TEXT
+);
+
 CREATE TABLE IF NOT EXISTS manual_reservoir_logs (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     ts             INTEGER NOT NULL,
@@ -98,6 +111,84 @@ async def init_db(conn: aiosqlite.Connection) -> None:
         pass  # column already exists
     await conn.commit()
     conn.row_factory = aiosqlite.Row
+
+
+async def upsert_node(conn: aiosqlite.Connection, node: dict) -> None:
+    """Insert or update node record from a HELLO packet. Never overwrites alias/name/note."""
+    await conn.execute(
+        """INSERT INTO nodes (node_id, num_sensors, fw_version, last_seen, last_rssi, last_vbat, flags)
+           VALUES (:node_id, :num_sensors, :fw_version, :last_seen, :last_rssi, :last_vbat, :flags)
+           ON CONFLICT(node_id) DO UPDATE SET
+               num_sensors=excluded.num_sensors,
+               fw_version=COALESCE(excluded.fw_version, nodes.fw_version),
+               last_seen=excluded.last_seen,
+               last_rssi=excluded.last_rssi,
+               last_vbat=excluded.last_vbat,
+               flags=excluded.flags""",
+        node,
+    )
+    await conn.commit()
+
+
+async def upsert_node_seen(conn: aiosqlite.Connection, node_id: str, sensor_id: int,
+                           last_seen: int, last_rssi, last_vbat, flags: int) -> None:
+    """Update node telemetry from a SENSOR packet.
+    On first-ever SENSOR: creates the row with num_sensors=sensor_id (lower bound).
+    On conflict: updates only last_seen/rssi/vbat/flags and bumps num_sensors if sensor_id
+    is higher than stored value. Never touches alias/name/note/fw_version.
+    """
+    await conn.execute(
+        """INSERT INTO nodes (node_id, num_sensors, fw_version, last_seen, last_rssi, last_vbat, flags)
+           VALUES (:node_id, :num_sensors, NULL, :last_seen, :last_rssi, :last_vbat, :flags)
+           ON CONFLICT(node_id) DO UPDATE SET
+               num_sensors=MAX(nodes.num_sensors, excluded.num_sensors),
+               last_seen=excluded.last_seen,
+               last_rssi=excluded.last_rssi,
+               last_vbat=excluded.last_vbat,
+               flags=excluded.flags""",
+        {"node_id": node_id, "num_sensors": sensor_id,
+         "last_seen": last_seen, "last_rssi": last_rssi,
+         "last_vbat": last_vbat, "flags": flags},
+    )
+    await conn.commit()
+
+
+async def patch_node(conn: aiosqlite.Connection, node_id: str, fields: dict) -> bool:
+    """Update editable node fields (alias, name, note). Returns False if node not found."""
+    allowed = {"alias", "name", "note"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return False
+    set_clause = ", ".join(f"{k}=:{k}" for k in updates)
+    updates["node_id"] = node_id
+    cur = await conn.execute(
+        f"UPDATE nodes SET {set_clause} WHERE node_id=:node_id", updates
+    )
+    await conn.commit()
+    return cur.rowcount > 0
+
+
+async def get_all_nodes(conn: aiosqlite.Connection) -> list[dict]:
+    now = int(time.time())
+    async with conn.execute("SELECT * FROM nodes ORDER BY last_seen DESC NULLS LAST") as cur:
+        rows = await cur.fetchall()
+    result = []
+    for row in rows:
+        d = dict(row)
+        d["online"] = (now - (d["last_seen"] or 0)) < ONLINE_TIMEOUT_S
+        result.append(d)
+    return result
+
+
+async def get_node(conn: aiosqlite.Connection, node_id: str) -> dict | None:
+    now = int(time.time())
+    async with conn.execute("SELECT * FROM nodes WHERE node_id=?", (node_id,)) as cur:
+        row = await cur.fetchone()
+    if row is None:
+        return None
+    d = dict(row)
+    d["online"] = (now - (d["last_seen"] or 0)) < ONLINE_TIMEOUT_S
+    return d
 
 
 async def insert_reading(conn: aiosqlite.Connection, r: dict) -> None:

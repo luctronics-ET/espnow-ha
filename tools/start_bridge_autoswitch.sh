@@ -8,15 +8,17 @@ BROKER="/home/luc/Dev/espnow-ha/tools/mqtt_broker.py"
 # Leave empty to accept the first available /dev/ttyACM* or /dev/ttyUSB*.
 GATEWAY_USB_SERIAL_SHORT="${GATEWAY_USB_SERIAL_SHORT:-}"
 SERIAL_PORT=""
-REMOTE_HOST="192.168.0.177"
-REMOTE_PORT="1883"
-MQTT_USER="aguada"
-MQTT_PASS="aguadagtw01"
+REMOTE_HOST="${REMOTE_HOST:-127.0.0.1}"
+REMOTE_PORT="${REMOTE_PORT:-1883}"
+MQTT_USER="${MQTT_USER:-aguada}"
+MQTT_PASS="${MQTT_PASS:-aguadagtw01}"
 
 INFLUX_URL="http://localhost:8086"
 INFLUX_TOKEN="aguada-admin-token-2024"
 INFLUX_ORG="aguada"
 INFLUX_BUCKET="reservoirs"
+GATEWAY_TIMEOUT_S="${GATEWAY_TIMEOUT_S:-90}"
+SERIAL_RECONNECT_DELAY_S="${SERIAL_RECONNECT_DELAY_S:-2}"
 
 BRIDGE_LOG="/tmp/bridge_debug.log"
 BROKER_LOG="/tmp/local_mqtt.log"
@@ -72,6 +74,17 @@ except Exception:
 finally:
     s.close()
 PY
+}
+
+is_local_target() {
+  case "$REMOTE_HOST" in
+    127.0.0.1|localhost|::1)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 start_local_broker_if_needed() {
@@ -135,10 +148,12 @@ PY
     --mqtt-port "$REMOTE_PORT" \
     --mqtt-user "$MQTT_USER" \
     --mqtt-password "$MQTT_PASS" \
+    --gateway-timeout "$GATEWAY_TIMEOUT_S" \
+    --serial-reconnect-delay "$SERIAL_RECONNECT_DELAY_S" \
     "${INFLUX_ARGS[@]}" \
     --debug > "$BRIDGE_LOG" 2>&1 &
 
-  echo "[$(date '+%F %T')] bridge started pid=$! target=$target_host" >> "$SWITCH_LOG"
+  echo "[$(date '+%F %T')] bridge started pid=$! target=$target_host gateway_timeout=${GATEWAY_TIMEOUT_S}s reconnect_delay=${SERIAL_RECONNECT_DELAY_S}s" >> "$SWITCH_LOG"
 }
 
 mkdir -p /tmp
@@ -157,13 +172,18 @@ fi
 echo "[$(date '+%F %T')] autoswitch supervisor started" >> "$SWITCH_LOG"
 
 while true; do
-  state="$(is_remote_up)"
-  if [[ "$state" == "UP" ]]; then
-    ensure_bridge_target "$REMOTE_HOST"
-    stop_local_broker_if_running
-  else
+  if is_local_target; then
     start_local_broker_if_needed
-    ensure_bridge_target "127.0.0.1"
+    ensure_bridge_target "$REMOTE_HOST"
+  else
+    state="$(is_remote_up)"
+    if [[ "$state" == "UP" ]]; then
+      ensure_bridge_target "$REMOTE_HOST"
+      stop_local_broker_if_running
+    else
+      start_local_broker_if_needed
+      ensure_bridge_target "127.0.0.1"
+    fi
   fi
 
   sleep 20

@@ -207,8 +207,9 @@ static void process_cmd(const char *str) {
     else
         node_id = doc["node_id"].as<uint16_t>();
 
-    if      (strcmp(cmd, "RESTART") == 0) cmd_restart(node_id);
-    else if (strcmp(cmd, "CONFIG")  == 0) cmd_config(node_id, doc);
+    if      (strcmp(cmd, "RESTART")    == 0) cmd_restart(node_id);
+    else if (strcmp(cmd, "CMD_CONFIG") == 0) cmd_config(node_id, doc);
+    else if (strcmp(cmd, "CONFIG")     == 0) cmd_config(node_id, doc);  // legacy alias
     else ESP_LOGW(TAG, "Unknown cmd: %s", cmd);
 }
 

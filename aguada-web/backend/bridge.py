@@ -18,7 +18,7 @@ from typing import Callable, Optional
 import yaml
 
 from .calc import calc_level
-from .db import insert_reading, upsert_state
+from .db import insert_reading, upsert_state, upsert_node, upsert_node_seen
 
 logger = logging.getLogger("bridge")
 
@@ -121,6 +121,14 @@ class Bridge:
         self._thread: Optional[threading.Thread] = None
         self._mqtt_client = None
         self._cmd_queue: queue.Queue = queue.Queue()
+        self._gw_status: dict = {
+            "connected": False,
+            "port": None,
+            "mac": None,
+            "fw": None,
+            "sim_mode": False,
+            "last_seen": None,
+        }
         self._init_mqtt()
 
     def _init_mqtt(self) -> None:
@@ -161,6 +169,10 @@ class Bridge:
         except Exception as e:
             logger.warning("MQTT publish error: %s", e)
 
+    def get_status(self) -> dict:
+        """Retorna status atual do gateway USB (thread-safe)."""
+        return dict(self._gw_status)
+
     def start(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
         serial_port = _detect_serial_port(os.getenv("SERIAL_PORT"))
@@ -181,6 +193,9 @@ class Bridge:
                     serial_port = resolved_port
                 ser = serial.Serial(serial_port, 115200, timeout=1, dsrdtr=False, rtscts=False)
                 logger.info("Serial aberto: %s", serial_port)
+                self._gw_status["connected"] = True
+                self._gw_status["port"] = serial_port
+                self._gw_status["sim_mode"] = False
                 try:
                     ser.reset_input_buffer()
                     ser.reset_output_buffer()
@@ -199,8 +214,10 @@ class Bridge:
                 self._send_settime(ser)
                 self._read_loop(ser)
             except Exception as e:
+                self._gw_status["connected"] = False
                 if allow_sim:
                     logger.warning("Serial indisponível (%s) — modo simulação habilitado por BRIDGE_ALLOW_SIMULATION", e)
+                    self._gw_status["sim_mode"] = True
                     self._sim_loop()
                     return
                 logger.error(
@@ -289,6 +306,9 @@ class Bridge:
                 # Reenvia SETTIME quando gateway reinicia
                 if raw.get("type") == "GATEWAY_READY":
                     logger.info("GATEWAY_READY recebido — reenviando SETTIME")
+                    self._gw_status["mac"] = raw.get("mac")
+                    self._gw_status["fw"] = raw.get("fw")
+                    self._gw_status["last_seen"] = int(time.time())
                     self._send_settime(ser)
                 self._handle(raw)
             except Exception as e:
@@ -351,6 +371,9 @@ class Bridge:
                 raw.get("node_id"), raw.get("sensor_id"),
                 raw.get("distance_cm"), raw.get("rssi"), raw.get("ts"),
             )
+        elif msg_type == "HELLO":
+            asyncio.run_coroutine_threadsafe(self._handle_hello(raw), self._loop)
+            return
         elif msg_type not in ("GATEWAY_READY", "GATEWAY_STATUS", "CMD_ACK"):
             logger.debug("Mensagem tipo=%s: %s", msg_type, raw)
         record = _process_message(raw)
@@ -363,6 +386,32 @@ class Bridge:
             return
         asyncio.run_coroutine_threadsafe(self._save_and_notify(record), self._loop)
 
+    async def _handle_hello(self, raw: dict) -> None:
+        import aiosqlite
+        node_id = raw.get("node_id", "").lower()
+        if not node_id:
+            return
+        node = {
+            "node_id": node_id,
+            "num_sensors": int(raw.get("num_sensors", 0)),
+            "fw_version": raw.get("fw_version"),
+            "last_seen": int(time.time()),
+            "last_rssi": raw.get("rssi"),
+            "last_vbat": (raw.get("vbat") / 10.0) if raw.get("vbat") is not None else None,
+            "flags": raw.get("flags", 0),
+        }
+        try:
+            async with aiosqlite.connect(self.db_path) as conn:
+                conn.row_factory = aiosqlite.Row
+                await upsert_node(conn, node)
+            logger.info("HELLO: node=%s num_sensors=%d fw=%s rssi=%s",
+                        node_id, node["num_sensors"], node["fw_version"], node["last_rssi"])
+        except Exception as e:
+            logger.error("Erro ao salvar node no DB: %s", e)
+        self.notify_cb({"type": "node_seen", "node_id": node_id,
+                        "num_sensors": node["num_sensors"], "fw_version": node["fw_version"],
+                        "last_seen": node["last_seen"], "last_rssi": node["last_rssi"]})
+
     async def _save_and_notify(self, record: dict) -> None:
         import aiosqlite
         try:
@@ -370,6 +419,15 @@ class Bridge:
                 conn.row_factory = aiosqlite.Row
                 await insert_reading(conn, record)
                 await upsert_state(conn, record)
+                await upsert_node_seen(
+                    conn,
+                    node_id=record["node_id"],
+                    sensor_id=record["sensor_id"],
+                    last_seen=record["ts"],
+                    last_rssi=record.get("rssi"),
+                    last_vbat=record.get("vbat"),
+                    flags=record.get("flags", 0),
+                )
             logger.info(
                 "Gravado: alias=%s dist=%.1f level=%.1f ts=%d",
                 record["alias"], record.get("distance_cm") or 0,
