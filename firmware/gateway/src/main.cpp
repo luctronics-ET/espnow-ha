@@ -20,6 +20,28 @@
 
 static const char *TAG = "gw";
 
+#ifndef GATEWAY_VERSION_SUFFIX
+#define GATEWAY_VERSION_SUFFIX ""
+#endif
+
+#ifndef GATEWAY_READY_REPEAT_COUNT
+#define GATEWAY_READY_REPEAT_COUNT 1
+#endif
+
+#ifndef GATEWAY_READY_REPEAT_INTERVAL_MS
+#define GATEWAY_READY_REPEAT_INTERVAL_MS 1200
+#endif
+
+#ifndef GATEWAY_STATUS_INTERVAL_MS
+#define GATEWAY_STATUS_INTERVAL_MS 0
+#endif
+
+#ifndef GATEWAY_JSON_FLUSH
+#define GATEWAY_JSON_FLUSH 1
+#endif
+
+static constexpr const char *GATEWAY_USB_FW_VERSION = FW_VERSION GATEWAY_VERSION_SUFFIX;
+
 // ── Timestamp ─────────────────────────────────────────────────────────────────
 // No WiFi/NTP on gateway. bridge.py sends {"cmd":"SETTIME","ts":...} at startup.
 static int64_t s_time_offset_s = 0;
@@ -32,6 +54,13 @@ static uint32_t unix_now(void) {
 #define PKT_QUEUE_LEN 16
 typedef struct { espnow_packet_t pkt; uint8_t src_mac[6]; } pkt_event_t;
 static QueueHandle_t s_pkt_queue = nullptr;
+static uint32_t s_queue_drops = 0;
+static uint32_t s_last_packet_ms = 0;
+static uint32_t s_last_status_ms = 0;
+static uint32_t s_last_ready_ms = 0;
+static uint32_t s_ready_sent = 0;
+static bool s_time_synced = false;
+static uint8_t s_gateway_mac[6] = {0};
 
 // ── Node MAC cache ────────────────────────────────────────────────────────────
 #define NODE_CACHE_MAX 20
@@ -61,7 +90,93 @@ static const uint8_t *find_mac(uint16_t node_id) {
 static void json_out(JsonDocument &doc) {
     serializeJson(doc, Serial);
     Serial.println();
+#if GATEWAY_JSON_FLUSH
     Serial.flush();
+#endif
+}
+
+static void format_mac(const uint8_t mac[6], char *out, size_t out_len) {
+    snprintf(out, out_len, "%02X:%02X:%02X:%02X:%02X:%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+static void output_warn(const char *code, const char *message) {
+    JsonDocument doc;
+    doc["v"] = 3;
+    doc["type"] = "WARN";
+    doc["code"] = code;
+    doc["message"] = message;
+    doc["ts"] = unix_now();
+    json_out(doc);
+}
+
+static void fill_gateway_ready(JsonDocument &doc) {
+    char mac_str[20];
+    format_mac(s_gateway_mac, mac_str, sizeof(mac_str));
+    doc["v"] = 3;
+    doc["type"] = "GATEWAY_READY";
+    doc["fw"] = GATEWAY_USB_FW_VERSION;
+    doc["mac"] = mac_str;
+    doc["ts"] = unix_now();
+}
+
+static void output_gateway_ready(void) {
+    JsonDocument doc;
+    fill_gateway_ready(doc);
+    json_out(doc);
+    s_last_ready_ms = millis();
+    s_ready_sent++;
+}
+
+static void output_gateway_status(void) {
+    JsonDocument doc;
+    gw_espnow_stats_t stats = {};
+    gw_espnow_get_stats(&stats);
+
+    char mac_str[20];
+    format_mac(s_gateway_mac, mac_str, sizeof(mac_str));
+
+    doc["v"] = 3;
+    doc["type"] = "GATEWAY_STATUS";
+    doc["fw"] = GATEWAY_USB_FW_VERSION;
+    doc["mac"] = mac_str;
+    doc["port"] = "usb";
+    doc["uptime_s"] = millis() / 1000UL;
+    doc["free_heap"] = ESP.getFreeHeap();
+    doc["rx_packets"] = stats.rx_packets;
+    doc["crc_failures"] = stats.crc_failures;
+    doc["queue_drops"] = s_queue_drops;
+    doc["known_nodes"] = s_nodes_len;
+    doc["channel"] = ESPNOW_CHANNEL;
+    doc["connected"] = true;
+    doc["sim_mode"] = false;
+    doc["time_synced"] = s_time_synced;
+    doc["ready_count"] = s_ready_sent;
+    if (s_last_packet_ms > 0) {
+        doc["last_packet_age_s"] = (millis() - s_last_packet_ms) / 1000UL;
+    } else {
+        doc["last_packet_age_s"] = nullptr;
+    }
+    doc["ts"] = unix_now();
+    json_out(doc);
+    s_last_status_ms = millis();
+}
+
+static void output_time_ack(void) {
+    JsonDocument doc;
+    doc["v"] = 3;
+    doc["type"] = "TIME_ACK";
+    doc["fw"] = GATEWAY_USB_FW_VERSION;
+    doc["ts"] = unix_now();
+    json_out(doc);
+}
+
+static void set_vbat_json(JsonDocument &doc, int8_t raw_vbat) {
+    if (raw_vbat < 0) {
+        doc["vbat"] = nullptr;
+        return;
+    }
+    doc["vbat"] = ((float)raw_vbat) / 10.0f;
 }
 
 static void output_sensor(const espnow_packet_t *pkt) {
@@ -73,7 +188,7 @@ static void output_sensor(const espnow_packet_t *pkt) {
     doc["sensor_id"]   = pkt->sensor_id;
     doc["distance_cm"] = (pkt->flags & FLAG_SENSOR_ERROR) ? -1 : (int)pkt->distance_cm;
     doc["rssi"]        = pkt->rssi;
-    doc["vbat"]        = pkt->vbat;
+    set_vbat_json(doc, pkt->vbat);
     doc["flags"]       = pkt->flags;
     doc["seq"]         = pkt->seq;
     doc["ts"]          = unix_now();
@@ -89,7 +204,7 @@ static void output_heartbeat(const espnow_packet_t *pkt) {
     doc["sensor_id"]   = pkt->sensor_id;
     doc["distance_cm"] = (int)pkt->distance_cm;
     doc["rssi"]        = pkt->rssi;
-    doc["vbat"]        = pkt->vbat;
+    set_vbat_json(doc, pkt->vbat);
     doc["reserved"]    = pkt->reserved;  // used by SENSOR_ID_ENV: humidity 0-100
     doc["seq"]         = pkt->seq;
     doc["ts"]          = unix_now();
@@ -106,7 +221,7 @@ static void output_hello(const espnow_packet_t *pkt) {
     // distance_cm reused to carry num_sensors in HELLO
     doc["num_sensors"] = pkt->distance_cm;
     doc["rssi"]        = pkt->rssi;
-    doc["vbat"]        = pkt->vbat;
+    set_vbat_json(doc, pkt->vbat);
     doc["flags"]       = pkt->flags;  // FLAG_BTN_HELLO=0x40 indicates button press
     doc["ts"]          = unix_now();
     json_out(doc);
@@ -119,7 +234,10 @@ static void on_recv(const espnow_packet_t *pkt, const uint8_t *src_mac) {
     pkt_event_t evt;
     evt.pkt = *pkt;
     memcpy(evt.src_mac, src_mac, 6);
-    xQueueSend(s_pkt_queue, &evt, 0);  // non-blocking; drop if full
+    s_last_packet_ms = millis();
+    if (xQueueSend(s_pkt_queue, &evt, 0) != pdTRUE) {
+        s_queue_drops++;
+    }
 }
 
 // ── Command → ESP-NOW ─────────────────────────────────────────────────────────
@@ -186,8 +304,10 @@ static size_t s_buf_len = 0;
 
 static void process_cmd(const char *str) {
     JsonDocument doc;
-    if (deserializeJson(doc, str) != DeserializationError::Ok) {
+    DeserializationError err = deserializeJson(doc, str);
+    if (err != DeserializationError::Ok) {
         ESP_LOGW(TAG, "Bad JSON: %.80s", str);
+        output_warn("bad_json", "serial command parse failed");
         return;
     }
 
@@ -197,7 +317,15 @@ static void process_cmd(const char *str) {
     if (strcmp(cmd, "SETTIME") == 0) {
         int64_t ts = doc["ts"].as<int64_t>();
         s_time_offset_s = ts - (esp_timer_get_time() / 1000000LL);
+        s_time_synced = true;
         ESP_LOGI(TAG, "Time set, unix_now=%u", unix_now());
+        output_time_ack();
+        output_gateway_status();
+        return;
+    }
+
+    if (strcmp(cmd, "STATUS") == 0 || strcmp(cmd, "GET_STATUS") == 0) {
+        output_gateway_status();
         return;
     }
 
@@ -210,7 +338,10 @@ static void process_cmd(const char *str) {
     if      (strcmp(cmd, "RESTART")    == 0) cmd_restart(node_id);
     else if (strcmp(cmd, "CMD_CONFIG") == 0) cmd_config(node_id, doc);
     else if (strcmp(cmd, "CONFIG")     == 0) cmd_config(node_id, doc);  // legacy alias
-    else ESP_LOGW(TAG, "Unknown cmd: %s", cmd);
+    else {
+        ESP_LOGW(TAG, "Unknown cmd: %s", cmd);
+        output_warn("unknown_cmd", cmd);
+    }
 }
 
 static void serial_tick(void) {
@@ -239,25 +370,34 @@ void setup(void) {
     s_pkt_queue = xQueueCreate(PKT_QUEUE_LEN, sizeof(pkt_event_t));
     gw_espnow_init(ESPNOW_CHANNEL, on_recv);
 
-    uint8_t mac[6];
     // esp_wifi_get_mac is reliable right after WiFi.mode(WIFI_STA) in gw_espnow_init
-    if (esp_wifi_get_mac(WIFI_IF_STA, mac) != ESP_OK) {
-        WiFi.macAddress(mac);  // fallback
+    if (esp_wifi_get_mac(WIFI_IF_STA, s_gateway_mac) != ESP_OK) {
+        WiFi.macAddress(s_gateway_mac);  // fallback
     }
 
-    JsonDocument doc;
-    char mac_str[20];
-    snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    doc["v"]    = 3;
-    doc["type"] = "GATEWAY_READY";
-    doc["fw"]   = FW_VERSION;
-    doc["mac"]  = mac_str;
-    doc["ts"]   = 0;
-    json_out(doc);
+    output_gateway_ready();
+#if GATEWAY_STATUS_INTERVAL_MS > 0
+    output_gateway_status();
+#endif
 }
 
 void loop(void) {
+    if (s_ready_sent < GATEWAY_READY_REPEAT_COUNT) {
+        uint32_t now = millis();
+        if (now - s_last_ready_ms >= GATEWAY_READY_REPEAT_INTERVAL_MS) {
+            output_gateway_ready();
+        }
+    }
+
+#if GATEWAY_STATUS_INTERVAL_MS > 0
+    {
+        uint32_t now = millis();
+        if (now - s_last_status_ms >= GATEWAY_STATUS_INTERVAL_MS) {
+            output_gateway_status();
+        }
+    }
+#endif
+
     // Drain packet queue (filled by ESP-NOW WiFi-task callback).
     pkt_event_t evt;
     while (xQueueReceive(s_pkt_queue, &evt, 0) == pdTRUE) {
