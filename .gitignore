@@ -6,6 +6,12 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+build_idf/
+
+# ESP-IDF generated config
+sdkconfig
+sdkconfig.old
+sdkconfig.*
 
 # ── Reference / archive (kept locally, not tracked) ──────────────────────────
 .delete/

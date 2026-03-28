@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -u
 
+# Optional environment overrides (gitignored): repoRoot/.env
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/../.env}"
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
 VENV_PY="/home/luc/Dev/espnow-ha/.venv/bin/python"
 BRIDGE="/home/luc/Dev/espnow-ha/tools/bridge.py"
 BROKER="/home/luc/Dev/espnow-ha/tools/mqtt_broker.py"
@@ -13,6 +23,10 @@ REMOTE_PORT="${REMOTE_PORT:-1883}"
 MQTT_USER="${MQTT_USER:-aguada}"
 MQTT_PASS="${MQTT_PASS:-aguadagtw01}"
 
+# When this file exists, the supervisor will keep the bridge stopped.
+# Useful for flashing (serial bootloader needs exclusive access).
+BRIDGE_PAUSE_FILE="${BRIDGE_PAUSE_FILE:-/tmp/aguada_bridge.pause}"
+
 INFLUX_URL="http://localhost:8086"
 INFLUX_TOKEN="aguada-admin-token-2024"
 INFLUX_ORG="aguada"
@@ -24,22 +38,31 @@ BRIDGE_LOG="/tmp/bridge_debug.log"
 BROKER_LOG="/tmp/local_mqtt.log"
 SWITCH_LOG="/tmp/bridge_autoswitch.log"
 
-detect_gateway_port() {
-  # 0) Prefer stable by-id symlink for known CH340 gateway adapter
-  local byid_known="/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7B067329-if00"
-  if [[ -e "$byid_known" ]]; then
-    echo "$byid_known"
-    return 0
-  fi
+PAUSE_STATE=0
 
-  # 0.1) Fallback: first stable by-id serial symlink
-  for p in /dev/serial/by-id/*; do
-    [[ -e "$p" ]] || continue
-    echo "$p"
-    return 0
+serial_port_busy_by_other_process() {
+  local port="$1"
+  command -v lsof >/dev/null 2>&1 || return 1
+  [[ -e "$port" ]] || return 1
+
+  local pids pid cmd
+  pids=$(lsof -t "$port" 2>/dev/null | sort -u || true)
+  [[ -n "$pids" ]] || return 1
+
+  for pid in $pids; do
+    [[ -r "/proc/$pid/cmdline" ]] || continue
+    cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" | tr -s ' ')
+    # Allow our own bridge processes (we will pkill them when restarting)
+    if [[ "$cmd" != *"bridge.py"* ]]; then
+      return 0
+    fi
   done
 
-  # 1) First, try matching by known USB serial short-id (most reliable)
+  return 1
+}
+
+detect_gateway_port() {
+  # 0) If configured, match by known USB serial short-id (most reliable)
   if [[ -n "$GATEWAY_USB_SERIAL_SHORT" ]]; then
     for p in /dev/ttyACM* /dev/ttyUSB*; do
       [[ -e "$p" ]] || continue
@@ -51,7 +74,32 @@ detect_gateway_port() {
     done
   fi
 
-  # 2) Fallback: pick first available ACM/USB device
+  # 1) Prefer stable by-id symlink(s) for known CH34x gateway adapters
+  local byid_known
+  for byid_known in \
+    "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7B156617-if00" \
+    "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7B067329-if00"; do
+    if [[ -e "$byid_known" ]]; then
+      echo "$byid_known"
+      return 0
+    fi
+  done
+
+  # 2) Prefer any by-id symlink that looks like a CH34x/1a86 adapter
+  for p in /dev/serial/by-id/usb-1a86_*; do
+    [[ -e "$p" ]] || continue
+    echo "$p"
+    return 0
+  done
+
+  # 3) Fallback: first stable by-id serial symlink
+  for p in /dev/serial/by-id/*; do
+    [[ -e "$p" ]] || continue
+    echo "$p"
+    return 0
+  done
+
+  # 4) Fallback: pick first available ACM/USB device
   for p in /dev/ttyACM* /dev/ttyUSB*; do
     [[ -e "$p" ]] || continue
     echo "$p"
@@ -117,6 +165,11 @@ ensure_bridge_target() {
     fi
   fi
 
+  if serial_port_busy_by_other_process "$SERIAL_PORT"; then
+    echo "[$(date '+%F %T')] gateway serial busy (non-bridge holder); skipping bridge start for now: $SERIAL_PORT" >> "$SWITCH_LOG"
+    return 0
+  fi
+
   if pgrep -f "bridge.py --port $SERIAL_PORT --mqtt $target_host --mqtt-port $REMOTE_PORT" >/dev/null 2>&1; then
     return 0
   fi
@@ -172,6 +225,19 @@ fi
 echo "[$(date '+%F %T')] autoswitch supervisor started" >> "$SWITCH_LOG"
 
 while true; do
+  if [[ -e "$BRIDGE_PAUSE_FILE" ]]; then
+    if [[ $PAUSE_STATE -eq 0 ]]; then
+      echo "[$(date '+%F %T')] bridge paused (lock file present): $BRIDGE_PAUSE_FILE" >> "$SWITCH_LOG"
+      PAUSE_STATE=1
+    fi
+    pkill -f "python.*bridge.py" >/dev/null 2>&1 || true
+    sleep 2
+    continue
+  elif [[ $PAUSE_STATE -eq 1 ]]; then
+    echo "[$(date '+%F %T')] bridge resumed (lock file removed): $BRIDGE_PAUSE_FILE" >> "$SWITCH_LOG"
+    PAUSE_STATE=0
+  fi
+
   if is_local_target; then
     start_local_broker_if_needed
     ensure_bridge_target "$REMOTE_HOST"

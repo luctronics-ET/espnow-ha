@@ -1,8 +1,8 @@
 {
   "idf.currentSetup": "/home/luc/.espressif/v5.5.3/esp-idf",
-  "idf.flashType": "JTAG",
-  "idf.port": "/dev/ttyACM1",
-  "idf.monitorPort": "/dev/ttyACM1",
+  "idf.flashType": "UART",
+  "idf.port": "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7B156617-if00",
+  "idf.monitorPort": "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7B156617-if00",
   "idf.openOcdConfigs": [
     "board/esp32c3-builtin.cfg"
   ],

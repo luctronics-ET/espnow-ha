@@ -8,11 +8,16 @@ cd "$(dirname "$0")/../firmware/node"
 echo "=== Aguada Node Flash Tool ==="
 echo
 
-# Para o bridge se estiver rodando
-if pgrep -f bridge.py > /dev/null; then
-    echo "Parando bridge.py..."
-    pkill -f bridge.py
-    sleep 2
+# Por padrão, NÃO pare o bridge (ele costuma estar no gateway, em outra porta).
+# Se você realmente precisar liberar a serial (ex: está tentando gravar na mesma porta), rode com:
+#   STOP_BRIDGE=1 ./flash_node_auto.sh
+STOP_BRIDGE="${STOP_BRIDGE:-0}"
+if [[ "$STOP_BRIDGE" == "1" ]]; then
+    if pgrep -f bridge.py > /dev/null; then
+        echo "Parando bridge.py (STOP_BRIDGE=1)..."
+        pkill -f bridge.py
+        sleep 2
+    fi
 fi
 
 # Procura dispositivos USB

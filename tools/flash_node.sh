@@ -88,10 +88,10 @@ fi
 
 # Reiniciar bridge se estava rodando
 if [ -n "$BRIDGE_PID" ]; then
-    echo "🔄 Reiniciando bridge.py..."
-    cd /home/luc/Dev/espnow-ha/tools
-    nohup python3 bridge.py --port /dev/ttyACM1 --mqtt 192.168.0.177 --mqtt-port 1883 --mqtt-user aguada --mqtt-password aguadagtw01 --debug > /tmp/bridge_debug.log 2>&1 &
-    echo "   Bridge PID: $!"
+    echo "🔄 O bridge estava usando $PORT e foi parado." 
+    echo "   Se você usa o autoswitch via systemd, reinicie com:"
+    echo "     systemctl --user restart aguada-bridge-autoswitch.service"
+    echo "   (ou execute novamente tools/start_bridge_autoswitch.sh)"
 fi
 
 echo ""
