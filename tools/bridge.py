@@ -76,6 +76,48 @@ def ts_to_iso(ts_value) -> str:
         ts = int(time.time())
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
 
+
+def vbat_to_volts(vbat_raw):
+    """Convert battery voltage to volts.
+
+    The protocol uses tenths-of-volts (e.g. 33 == 3.3V, -1 == n/a).
+    Some gateway variants may emit JSON null for n/a; accept both.
+    """
+    if vbat_raw is None:
+        return None
+    # Spec: -1 means n/a
+    if vbat_raw == -1:
+        return None
+    # Avoid treating bool as int (True/False)
+    if isinstance(vbat_raw, bool):
+        return None
+
+    try:
+        if isinstance(vbat_raw, int):
+            if vbat_raw < 0:
+                return None
+            return round(vbat_raw / 10.0, 1)
+
+        if isinstance(vbat_raw, float):
+            if vbat_raw < 0:
+                return None
+            # Be tolerant: some producers may already emit volts (e.g. 3.3)
+            if vbat_raw < 10:
+                return round(vbat_raw, 1)
+            return round(vbat_raw / 10.0, 1)
+
+        s = str(vbat_raw).strip()
+        if not s or s.lower() in {"null", "none"}:
+            return None
+        f = float(s)
+        if f < 0:
+            return None
+        if f < 10:
+            return round(f, 1)
+        return round(f / 10.0, 1)
+    except Exception:
+        return None
+
 # ── MQTT helpers ──────────────────────────────────────────────────────────────
 
 def mqtt_topic_state(node_id: str, sensor_id: int) -> str:
@@ -788,9 +830,21 @@ class Bridge:
             log.debug("No reservoir config for %s sensor %d", node_id, sensor_id)
             return
 
-        distance_cm = msg.get("distance_cm", -1)
-        if distance_cm < 0:
-            log.warning("Sensor error: %s/%d", node_id, sensor_id)
+        flags = msg.get("flags", 0)
+        try:
+            flags = int(flags) if flags is not None else 0
+        except Exception:
+            flags = 0
+
+        distance_cm_raw = msg.get("distance_cm", -1)
+        try:
+            distance_cm = int(distance_cm_raw) if distance_cm_raw is not None else -1
+        except Exception:
+            distance_cm = -1
+
+        # Spec: distance 0xFFFF or flags.sensor_error indicate invalid measurement
+        if distance_cm <= 0 or distance_cm == 0xFFFF or (flags & 0x04):
+            log.warning("Sensor error: %s/%d dist=%s flags=0x%02x", node_id, sensor_id, distance_cm_raw, flags)
             return
 
         calcs = calculate(distance_cm, cfg)
@@ -802,7 +856,7 @@ class Bridge:
             "pct":         calcs["pct"],
             "volume_L":    calcs["volume_L"],
             "rssi":        msg.get("rssi", 0),
-            "vbat":        round(msg.get("vbat", -1) / 10.0, 1) if msg.get("vbat", -1) != -1 else None,
+            "vbat":        vbat_to_volts(msg.get("vbat", -1)),
             "seq":         msg.get("seq", 0),
             "ts":          msg.get("ts", int(time.time())),
         }
@@ -827,8 +881,7 @@ class Bridge:
             raw_temp = int(msg.get("distance_cm", 1000))
             hum_pct  = int(msg.get("reserved", 0))
             temp_c   = round((raw_temp - 1000) / 10.0, 1)
-            vbat_raw = msg.get("vbat", -1)
-            vbat     = round(vbat_raw / 10.0, 1) if vbat_raw != -1 else None
+            vbat     = vbat_to_volts(msg.get("vbat", -1))
             ts       = msg.get("ts", int(time.time()))
 
             env_payload = {
@@ -889,8 +942,7 @@ class Bridge:
         node_id   = msg["node_id"].upper()
         num       = int(msg.get("num_sensors", 0))
         flags     = int(msg.get("flags", 0))
-        vbat_raw  = msg.get("vbat", -1)
-        vbat      = round(vbat_raw / 10.0, 1) if vbat_raw != -1 else None
+        vbat      = vbat_to_volts(msg.get("vbat", -1))
         self.tracker.seen(node_id)
         log.info("HELLO %s num_sensors=%d flags=0x%02x fw=%s",
                  node_id, num, flags, msg.get("fw_version"))
@@ -1016,14 +1068,18 @@ class Bridge:
         self._mark_gateway_seen()
 
         t = msg.get("type", "")
-        if   t == "SENSOR":         self._handle_sensor(msg)
-        elif t == "HEARTBEAT":      self._handle_heartbeat(msg)
-        elif t == "HELLO":          self._handle_hello(msg)
-        elif t == "GATEWAY_READY":  self._handle_gateway_ready(msg)
-        elif t == "GATEWAY_STATUS": self._handle_gateway_status(msg)
-        elif t == "CMD_ACK":        self._handle_cmd_ack(msg)
-        else:
-            log.debug("Unknown type: %s", t)
+        try:
+            if   t == "SENSOR":         self._handle_sensor(msg)
+            elif t == "HEARTBEAT":      self._handle_heartbeat(msg)
+            elif t == "HELLO":          self._handle_hello(msg)
+            elif t == "GATEWAY_READY":  self._handle_gateway_ready(msg)
+            elif t == "GATEWAY_STATUS": self._handle_gateway_status(msg)
+            elif t == "CMD_ACK":        self._handle_cmd_ack(msg)
+            else:
+                log.debug("Unknown type: %s", t)
+        except Exception:
+            # Keep the bridge running even if a handler hits unexpected data.
+            log.exception("Handler error for type=%s line=%s", t, line[:200])
 
     # ── Main loop ─────────────────────────────────────────────────────────────
 

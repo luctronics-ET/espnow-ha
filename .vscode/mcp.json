@@ -1,22 +1,29 @@
 {
+	"inputs": [
+		{
+			"id": "HA_TOKEN",
+			"type": "promptString",
+			"description": "Home Assistant long-lived access token",
+			"password": true
+		},
+		{
+			"id": "CONTEXT7_API_KEY",
+			"type": "promptString",
+			"description": "API key for authentication",
+			"password": true
+		}
+	],
 	"servers": {
-		"github": {
+		"homeassistant": {
 			"type": "http",
-			"url": "https://api.githubcopilot.com/mcp/"
-		},
-		"homeassistant/local": {
-			"type": "http",
-			"url": "http://homeassistant.local:8123/mcp_server/sse",
-			"headers": {
-				"Authorization": "HA_TOKEN"
-			}
-		},
-		"homeassistant/local-api": {
-			"type": "http",
-			"url": "http://homeassistant.local:8123/api/mcp",
+			"url": "http://192.168.0.177:8123/mcp_server/sse",
 			"headers": {
 				"Authorization": "Bearer ${input:HA_TOKEN}"
 			}
+		},
+		"github": {
+			"type": "http",
+			"url": "https://api.githubcopilot.com/mcp/"
 		},
 		"microsoft/playwright-mcp": {
 			"type": "stdio",
@@ -33,9 +40,7 @@
 			],
 			"env": {
 				"CONTEXT7_API_KEY": "${input:CONTEXT7_API_KEY}"
-			},
-			"gallery": "https://api.mcp.github.com",
-			"version": "1.0.31"
+			}
 		},
 		"io.github.ChromeDevTools/chrome-devtools-mcp": {
 			"type": "stdio",
@@ -48,23 +53,7 @@
 		},
 		"com.figma.mcp/mcp": {
 			"type": "http",
-			"url": "https://mcp.figma.com/mcp",
-			"gallery": "https://api.mcp.github.com",
-			"version": "1.0.3"
+			"url": "https://mcp.figma.com/mcp"
 		}
-	},
-	"inputs": [
-		{
-			"id": "HA_TOKEN",
-			"type": "promptString",
-			"description": "Home Assistant long-lived access token",
-			"password": true
-		},
-		{
-			"id": "CONTEXT7_API_KEY",
-			"type": "promptString",
-			"description": "API key for authentication",
-			"password": true
-		}
-	]
+	}
 }
